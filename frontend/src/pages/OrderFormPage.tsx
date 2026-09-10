@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { api, type ItemType, type ItemTypeRow, type Order, type OrderItem } from "../api";
+import { newId } from "../id";
 import { ITEM_FALLBACK } from "../labels";
 
 type DraftItem = {
@@ -26,7 +27,7 @@ type DraftItem = {
   area_m2: number;
 };
 
-function newItem(types: ItemTypeRow[], key = crypto.randomUUID()): DraftItem {
+function newItem(types: ItemTypeRow[], key = newId()): DraftItem {
   const first = types[0] ?? ITEM_FALLBACK[0];
   return {
     key,
@@ -69,7 +70,7 @@ export function OrderFormPage() {
       setNotes(order.notes);
       setItems(
         order.items.map((item) => ({
-          key: crypto.randomUUID(),
+          key: newId(),
           item_type: item.item_type,
           comment: item.comment,
           qty: item.qty,
@@ -166,7 +167,7 @@ export function OrderFormPage() {
           <Group justify="space-between" mb="xs">
             <Text fw={600}>Изделие {index + 1}</Text>
             <Group gap="xs">
-              <Button variant="light" size="xs" onClick={() => setItems((cur) => [...cur, { ...item, key: crypto.randomUUID() }])}>
+              <Button variant="light" size="xs" onClick={() => setItems((cur) => [...cur, { ...item, key: newId() }])}>
                 Дублировать
               </Button>
               <Button
