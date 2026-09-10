@@ -43,6 +43,16 @@ def test_worker_cannot_create_order(client) -> None:
     assert response.status_code == 403
 
 
+def test_work_centers_catalog(client) -> None:
+    token = login(client)
+    response = client.get("/api/catalog/work-centers", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    codes = [row["code"] for row in response.json()]
+    assert codes[0] == "construction"
+    assert "complectation" in codes
+    assert "saw" in codes
+
+
 def test_cannot_edit_queued_order(client) -> None:
     token = login(client)
     headers = {"Authorization": f"Bearer {token}"}

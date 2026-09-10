@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
 from app.catalog import LINEAR_PER_M2, ITEM_TYPE_VALUES
-from app.models import ItemType, OrderStatus, UserRole
+from app.models import AttachmentStore, ItemType, OrderStatus, UserRole
 
 
 class LoginIn(BaseModel):
@@ -18,6 +18,7 @@ class UserOut(BaseModel):
     display_name: str
     role: UserRole
     is_active: bool
+    efficiency: Decimal = Decimal("1.00")
 
     model_config = {"from_attributes": True}
 
@@ -34,6 +35,14 @@ class UserCreateIn(BaseModel):
     password: str = Field(min_length=3, max_length=200)
     role: UserRole
     is_active: bool = True
+    efficiency: Decimal = Field(default=Decimal("1.00"), ge=Decimal("0.1"), le=Decimal("2.0"))
+
+
+class UserPatchIn(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    role: UserRole | None = None
+    is_active: bool | None = None
+    efficiency: Decimal | None = Field(default=None, ge=Decimal("0.1"), le=Decimal("2.0"))
 
 
 class OrderItemIn(BaseModel):
@@ -61,8 +70,26 @@ class OrderItemOut(BaseModel):
     constructor_coeff: Decimal
     area_m2: Decimal
     linear_m: Decimal
+    procurement_needed: bool | None = None
+    construction_done_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AttachmentOut(BaseModel):
+    id: int
+    item_id: int
+    store: AttachmentStore
+    original_name: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ItemCompleteIn(BaseModel):
+    procurement_needed: bool
 
 
 class OrderIn(BaseModel):
@@ -87,6 +114,7 @@ class OrderOut(BaseModel):
     notes: str
     created_by_id: int
     claimed_by_id: int | None
+    claimed_by_name: str | None = None
     created_at: datetime
     items: list[OrderItemOut]
     total_area_m2: Decimal
@@ -106,6 +134,8 @@ class OrderListOut(BaseModel):
     item_count: int
     total_area_m2: Decimal
     created_by_name: str
+    claimed_by_id: int | None = None
+    claimed_by_name: str | None = None
 
     model_config = {"from_attributes": True}
 

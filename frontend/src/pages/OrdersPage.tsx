@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge, Button, Group, Stack, Table, Text, Title } from "@mantine/core";
 import { api, type OrderListRow, type User } from "../api";
-import { STATUS_LABEL, canEditOrders } from "../labels";
+import { STATUS_LABEL, canEditOrders, statusColor } from "../labels";
 
 export function OrdersPage({ user }: { user: User }) {
   const [rows, setRows] = useState<OrderListRow[]>([]);
@@ -44,6 +44,7 @@ export function OrdersPage({ user }: { user: User }) {
                 <Table.Th>Изделия</Table.Th>
                 <Table.Th>м²</Table.Th>
                 <Table.Th>Статус</Table.Th>
+                <Table.Th>Конструктор</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -63,10 +64,11 @@ export function OrdersPage({ user }: { user: User }) {
                   <Table.Td>{row.item_count}</Table.Td>
                   <Table.Td>{row.total_area_m2}</Table.Td>
                   <Table.Td>
-                    <Badge color={row.status === "draft" ? "gray" : "blue"} variant="light">
+                    <Badge color={statusColor(row.status)} variant="light">
                       {STATUS_LABEL[row.status]}
                     </Badge>
                   </Table.Td>
+                  <Table.Td>{row.claimed_by_name || "—"}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

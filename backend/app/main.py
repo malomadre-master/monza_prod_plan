@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import Base, SessionLocal, engine
-from app.routers import auth, orders, users
-from app.seed import seed_admin
+from app.routers import attachments, auth, orders, users
+from app.seed import seed_admin, seed_work_centers
 
 
 @asynccontextmanager
@@ -17,6 +17,7 @@ async def lifespan(_: FastAPI):
         db = SessionLocal()
         try:
             seed_admin(db)
+            seed_work_centers(db)
         finally:
             db.close()
     except Exception:
@@ -38,6 +39,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(orders.router)
+app.include_router(attachments.router)
 
 
 @app.get("/api/health")

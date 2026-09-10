@@ -12,6 +12,7 @@ from app.db import Base, get_db
 from app.main import app
 from app.models import User, UserRole
 from app.security import hash_password
+from app.seed import seed_work_centers
 
 engine = create_engine(
     "sqlite://",
@@ -52,7 +53,26 @@ def client(db_session):
             is_active=True,
         )
     )
+    db_session.add(
+        User(
+            username="designer1",
+            display_name="Конструктор Один",
+            password_hash=hash_password("pass"),
+            role=UserRole.designer,
+            is_active=True,
+        )
+    )
+    db_session.add(
+        User(
+            username="designer2",
+            display_name="Конструктор Два",
+            password_hash=hash_password("pass"),
+            role=UserRole.designer,
+            is_active=True,
+        )
+    )
     db_session.commit()
+    seed_work_centers(db_session)
 
     def override_db():
         session = TestingSession()

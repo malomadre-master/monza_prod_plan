@@ -3,7 +3,8 @@ import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom"
 import { AppShell, Burger, Button, Group, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { api, getToken, setToken, type User } from "./api";
-import { ROLE_LABEL, canEditOrders } from "./labels";
+import { ROLE_LABEL, canEditOrders, canWorkAsDesigner } from "./labels";
+import { ConstructorPage } from "./pages/ConstructorPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrderFormPage } from "./pages/OrderFormPage";
 import { OrderViewPage } from "./pages/OrderViewPage";
@@ -73,6 +74,11 @@ export function App() {
             <NavLink to="/orders" end onClick={close} style={navStyle}>
               Заказы
             </NavLink>
+            {canWorkAsDesigner(user.role) && (
+              <NavLink to="/constructor" onClick={close} style={navStyle}>
+                Конструктор
+              </NavLink>
+            )}
             {canEditOrders(user.role) && (
               <NavLink to="/orders/new" onClick={close} style={navStyle}>
                 Новый заказ
@@ -99,6 +105,18 @@ export function App() {
       <AppShell.Main>
         <Routes>
           <Route path="/login" element={<LoginPage onLogin={setUser} />} />
+          <Route
+            path="/constructor"
+            element={
+              <Protected user={user}>
+                {canWorkAsDesigner(user!.role) ? (
+                  <ConstructorPage user={user!} />
+                ) : (
+                  <Navigate to="/orders" replace />
+                )}
+              </Protected>
+            }
+          />
           <Route
             path="/orders"
             element={

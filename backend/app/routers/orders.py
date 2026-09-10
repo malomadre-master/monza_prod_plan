@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.catalog import ITEM_TYPES, ORDER_CREATE_ROLES
 from app.db import get_db
 from app.deps import get_current_user, require_roles
-from app.models import Order, OrderItem, OrderStatus, User
+from app.models import Order, OrderItem, OrderStatus, User, UserRole, WorkCenter
 from app.schemas import OrderIn, OrderItemOut, OrderListOut, OrderOut, linear_from_area
 
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -27,6 +27,7 @@ def _order_out(order: Order) -> OrderOut:
         notes=order.notes,
         created_by_id=order.created_by_id,
         claimed_by_id=order.claimed_by_id,
+        claimed_by_name=order.claimed_by.display_name if order.claimed_by else None,
         created_at=order.created_at,
         items=items,
         total_area_m2=total_area,
@@ -58,6 +59,22 @@ def item_types(_: User = Depends(get_current_user)) -> list[dict]:
     ]
 
 
+@router.get("/catalog/work-centers")
+def work_centers(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[dict]:
+    rows = db.query(WorkCenter).order_by(WorkCenter.sort_order, WorkCenter.id).all()
+    return [
+        {
+            "code": row.code,
+            "title": row.title,
+            "unit": row.unit,
+            "capacity_qty": str(row.capacity_qty),
+            "capacity_days": str(row.capacity_days),
+            "is_gate": row.is_gate,
+        }
+        for row in rows
+    ]
+
+
 @router.get("/customers", response_model=list[str])
 def customers(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[str]:
     rows = db.query(Order.customer).distinct().order_by(Order.customer).all()
@@ -65,13 +82,18 @@ def customers(db: Session = Depends(get_db), _: User = Depends(get_current_user)
 
 
 @router.get("/orders", response_model=list[OrderListOut])
-def list_orders(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[OrderListOut]:
-    orders = (
-        db.query(Order)
-        .options(joinedload(Order.items), joinedload(Order.created_by))
-        .order_by(Order.priority, Order.launch_date, Order.id)
-        .all()
+def list_orders(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[OrderListOut]:
+    query = db.query(Order).options(
+        joinedload(Order.items),
+        joinedload(Order.created_by),
+        joinedload(Order.claimed_by),
     )
+    if user.role == UserRole.designer:
+        query = query.filter(
+            Order.status != OrderStatus.draft,
+            (Order.claimed_by_id.is_(None)) | (Order.claimed_by_id == user.id),
+        )
+    orders = query.order_by(Order.priority, Order.launch_date, Order.id).all()
     result: list[OrderListOut] = []
     for order in orders:
         total_area = sum((item.area_m2 for item in order.items), Decimal("0"))
@@ -87,15 +109,26 @@ def list_orders(db: Session = Depends(get_db), _: User = Depends(get_current_use
                 item_count=len(order.items),
                 total_area_m2=total_area,
                 created_by_name=order.created_by.display_name,
+                claimed_by_id=order.claimed_by_id,
+                claimed_by_name=order.claimed_by.display_name if order.claimed_by else None,
             )
         )
     return result
 
 
 @router.get("/orders/{order_id}", response_model=OrderOut)
-def get_order(order_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> OrderOut:
-    order = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order_id).one_or_none()
+def get_order(order_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> OrderOut:
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items), joinedload(Order.claimed_by))
+        .filter(Order.id == order_id)
+        .one_or_none()
+    )
     if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заказ не найден")
+    if user.role == UserRole.designer and (
+        order.status == OrderStatus.draft or (order.claimed_by_id is not None and order.claimed_by_id != user.id)
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заказ не найден")
     return _order_out(order)
 

@@ -12,7 +12,16 @@ export const ROLE_LABEL: Record<Role, string> = {
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   draft: "Черновик",
   queued: "В очереди конструкторов",
+  in_design: "У конструктора",
+  in_production: "Конструирование готово",
 };
+
+export function statusColor(status: OrderStatus): string {
+  if (status === "draft") return "gray";
+  if (status === "queued") return "blue";
+  if (status === "in_design") return "orange";
+  return "teal";
+}
 
 export const ITEM_FALLBACK: { value: ItemType; label: string; coeff: string }[] = [
   { value: "kitchen", label: "Кухня", coeff: "1.0" },
@@ -30,4 +39,8 @@ export function itemLabel(types: { value: string; label: string }[], value: stri
 
 export function canEditOrders(role: Role): boolean {
   return role === "admin" || role === "planner";
+}
+
+export function canWorkAsDesigner(role: Role): boolean {
+  return role === "designer" || role === "admin";
 }

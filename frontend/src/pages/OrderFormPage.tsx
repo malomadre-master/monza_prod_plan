@@ -14,7 +14,7 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { api, type ItemType, type ItemTypeRow, type Order, type OrderItem, type OrderStatus } from "../api";
+import { api, type ItemType, type ItemTypeRow, type Order, type OrderItem } from "../api";
 import { ITEM_FALLBACK } from "../labels";
 
 type DraftItem = {
@@ -23,7 +23,6 @@ type DraftItem = {
   comment: string;
   qty: number;
   priority: number;
-  constructor_coeff: number;
   area_m2: number;
 };
 
@@ -35,7 +34,6 @@ function newItem(types: ItemTypeRow[], key = crypto.randomUUID()): DraftItem {
     comment: "",
     qty: 1,
     priority: 3,
-    constructor_coeff: Number(first.coeff),
     area_m2: 1,
   };
 }
@@ -76,7 +74,6 @@ export function OrderFormPage() {
           comment: item.comment,
           qty: item.qty,
           priority: item.priority,
-          constructor_coeff: Number(item.constructor_coeff),
           area_m2: Number(item.area_m2),
         })),
       );
@@ -86,8 +83,7 @@ export function OrderFormPage() {
   const totals = useMemo(() => {
     const area = items.reduce((sum, item) => sum + item.area_m2, 0);
     const linear = area * 10;
-    const coeff = items.reduce((sum, item) => sum + item.constructor_coeff * item.qty, 0);
-    return { area, linear, coeff, qty: items.reduce((sum, item) => sum + item.qty, 0) };
+    return { area, linear, qty: items.reduce((sum, item) => sum + item.qty, 0) };
   }, [items]);
 
   function setItem(key: string, patch: Partial<DraftItem>) {
@@ -96,11 +92,10 @@ export function OrderFormPage() {
 
   function changeType(key: string, value: string | null) {
     if (!value) return;
-    const type = types.find((row) => row.value === value);
-    setItem(key, { item_type: value as ItemType, constructor_coeff: Number(type?.coeff ?? 1) });
+    setItem(key, { item_type: value as ItemType });
   }
 
-  async function save(status: OrderStatus) {
+  async function save(status: "draft" | "queued") {
     if (!customer.trim() || !contractDate || !launchDate) {
       notifications.show({ color: "red", message: "Заполните заказчика и даты" });
       return;
@@ -120,7 +115,6 @@ export function OrderFormPage() {
           comment: item.comment,
           qty: item.qty,
           priority: item.priority,
-          constructor_coeff: String(item.constructor_coeff),
           area_m2: String(item.area_m2),
         }),
       ),
@@ -210,15 +204,6 @@ export function OrderFormPage() {
               value={item.priority}
               onChange={(v) => setItem(item.key, { priority: Number(v) || 3 })}
             />
-            <NumberInput
-              label="Коэф. конструктора"
-              min={0.1}
-              max={2}
-              step={0.1}
-              decimalScale={2}
-              value={item.constructor_coeff}
-              onChange={(v) => setItem(item.key, { constructor_coeff: Number(v) || 1 })}
-            />
           </SimpleGrid>
           <TextInput mt="sm" label="Комментарий" value={item.comment} onChange={(e) => setItem(item.key, { comment: e.currentTarget.value })} />
         </Paper>
@@ -229,8 +214,7 @@ export function OrderFormPage() {
 
       <Paper withBorder p="md">
         <Text>
-          Итого: {totals.qty} изд., {totals.area.toFixed(2)} м², {totals.linear.toFixed(2)} м.пог, сумма коэф.{" "}
-          {totals.coeff.toFixed(2)}
+          Итого: {totals.qty} изд., {totals.area.toFixed(2)} м², {totals.linear.toFixed(2)} м.пог
         </Text>
       </Paper>
 

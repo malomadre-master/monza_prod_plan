@@ -1,7 +1,8 @@
 const TOKEN_KEY = "monza_token";
 
 export type Role = "admin" | "planner" | "designer" | "supply" | "worker" | "observer";
-export type OrderStatus = "draft" | "queued";
+export type OrderStatus = "draft" | "queued" | "in_design" | "in_production";
+export type AttachmentStore = "production" | "procurement";
 export type ItemType = "kitchen" | "wardrobe" | "cabinet" | "hallway" | "mirror" | "appliance" | "other";
 
 export type User = {
@@ -10,6 +11,7 @@ export type User = {
   display_name: string;
   role: Role;
   is_active: boolean;
+  efficiency?: string;
 };
 
 export type OrderItem = {
@@ -18,9 +20,11 @@ export type OrderItem = {
   comment: string;
   qty: number;
   priority: number;
-  constructor_coeff: string;
+  constructor_coeff?: string;
   area_m2: string;
   linear_m?: string;
+  procurement_needed?: boolean | null;
+  construction_done_at?: string | null;
 };
 
 export type Order = {
@@ -34,6 +38,7 @@ export type Order = {
   notes: string;
   created_by_id: number;
   claimed_by_id: number | null;
+  claimed_by_name?: string | null;
   created_at: string;
   items: OrderItem[];
   total_area_m2: string;
@@ -51,6 +56,18 @@ export type OrderListRow = {
   item_count: number;
   total_area_m2: string;
   created_by_name: string;
+  claimed_by_id?: number | null;
+  claimed_by_name?: string | null;
+};
+
+export type Attachment = {
+  id: number;
+  item_id: number;
+  store: AttachmentStore;
+  original_name: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
 };
 
 export type ItemTypeRow = { value: ItemType; label: string; coeff: string };
@@ -75,7 +92,7 @@ export class ApiError extends Error {
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(options.headers);
-  if (options.body && !headers.has("Content-Type")) {
+  if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -100,4 +117,34 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return api<T>(path, { method: "POST", body: form, headers });
+}
+
+const INLINE_NAME = /\.(pdf|png|jpe?g|webp)$/i;
+
+export async function openAttachment(id: number, name: string): Promise<void> {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(`/api/attachments/${id}`, { headers });
+  if (!response.ok) {
+    throw new ApiError(response.status, "Не удалось открыть файл");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  if (INLINE_NAME.test(name)) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
 }

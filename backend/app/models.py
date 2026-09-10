@@ -20,6 +20,13 @@ class UserRole(StrEnum):
 class OrderStatus(StrEnum):
     draft = "draft"
     queued = "queued"
+    in_design = "in_design"
+    in_production = "in_production"
+
+
+class AttachmentStore(StrEnum):
+    production = "production"
+    procurement = "procurement"
 
 
 class ItemType(StrEnum):
@@ -41,6 +48,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), default=UserRole.observer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    efficiency: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=Decimal("1.00"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     created_orders: Mapped[list["Order"]] = relationship(back_populates="created_by", foreign_keys="Order.created_by_id")
@@ -79,5 +87,37 @@ class OrderItem(Base):
     constructor_coeff: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=Decimal("1.00"))
     area_m2: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     linear_m: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    procurement_needed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    construction_done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     order: Mapped[Order] = relationship(back_populates="items")
+    attachments: Mapped[list["Attachment"]] = relationship(back_populates="item", cascade="all, delete-orphan")
+
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("order_items.id", ondelete="CASCADE"), index=True)
+    store: Mapped[AttachmentStore] = mapped_column(Enum(AttachmentStore, name="attachment_store"))
+    original_name: Mapped[str] = mapped_column(String(255))
+    stored_name: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(120), default="application/octet-stream")
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    uploaded_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    item: Mapped[OrderItem] = relationship(back_populates="attachments")
+
+
+class WorkCenter(Base):
+    __tablename__ = "work_centers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True)
+    title: Mapped[str] = mapped_column(String(120))
+    unit: Mapped[str] = mapped_column(String(32))
+    capacity_qty: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    capacity_days: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("1"))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_gate: Mapped[bool] = mapped_column(Boolean, default=False)
