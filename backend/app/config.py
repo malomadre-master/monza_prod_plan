@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     attachments_dir: str = "attachments"
     bootstrap_admin_username: str = "admin"
-    bootstrap_admin_password: str = "admin"
+    bootstrap_admin_password: str = "009"
     bootstrap_admin_name: str = "Администратор"
 
     @property

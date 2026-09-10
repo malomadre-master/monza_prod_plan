@@ -19,17 +19,23 @@ DEFAULT_CENTERS = [
 
 
 def seed_admin(db: Session) -> None:
-    if db.query(User).count() > 0:
-        return
-    db.add(
-        User(
-            username=settings.bootstrap_admin_username,
-            display_name=settings.bootstrap_admin_name,
-            password_hash=hash_password(settings.bootstrap_admin_password),
-            role=UserRole.admin,
-            is_active=True,
+    username = settings.bootstrap_admin_username
+    password_hash = hash_password(settings.bootstrap_admin_password)
+    user = db.query(User).filter(User.username == username).one_or_none()
+    if user is None:
+        db.add(
+            User(
+                username=username,
+                display_name=settings.bootstrap_admin_name,
+                password_hash=password_hash,
+                role=UserRole.admin,
+                is_active=True,
+            )
         )
-    )
+    else:
+        user.password_hash = password_hash
+        user.role = UserRole.admin
+        user.is_active = True
     db.commit()
 
 
