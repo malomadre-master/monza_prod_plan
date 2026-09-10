@@ -86,11 +86,14 @@ echo 'ssh-ed25519 … monza-prod-plan-actions' >> /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 ```
 
-После этого каждый успешный CI на `main` (или **Actions → Deploy to Debian → Run workflow**) делает `git pull` + сборку + `docker compose up`.
+После этого каждый успешный CI на `main` (или **Actions → Deploy to Debian → Run workflow**) собирает фронт **на раннере GitHub**, копирует `frontend/dist` на сервер и там только `git pull` + `docker compose`. На telemonza `npm run build` при деплое не запускается — 2 CPU не тянут Vite за отведённое время.
 
 ## 3. Ручное обновление
 
 ```bash
 cd /opt/monza-prod-plan
+# полная сборка на сервере (медленно):
 bash deploy/update.sh
+# если dist уже приехал из Actions:
+SKIP_FRONTEND_BUILD=1 bash deploy/update.sh
 ```
