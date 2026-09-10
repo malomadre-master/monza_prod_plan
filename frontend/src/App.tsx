@@ -9,6 +9,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { OrderFormPage } from "./pages/OrderFormPage";
 import { OrderViewPage } from "./pages/OrderViewPage";
 import { OrdersPage } from "./pages/OrdersPage";
+import { PlanPage } from "./pages/PlanPage";
 import { UsersPage } from "./pages/UsersPage";
 
 const navStyle = ({ isActive }: { isActive: boolean }) => ({
@@ -71,6 +72,9 @@ export function App() {
       <AppShell.Navbar p="md">
         {user ? (
           <>
+            <NavLink to="/plan" end onClick={close} style={navStyle}>
+              План
+            </NavLink>
             <NavLink to="/orders" end onClick={close} style={navStyle}>
               Заказы
             </NavLink>
@@ -114,6 +118,14 @@ export function App() {
                 ) : (
                   <Navigate to="/orders" replace />
                 )}
+              </Protected>
+            }
+          />
+          <Route
+            path="/plan"
+            element={
+              <Protected user={user}>
+                <PlanPage />
               </Protected>
             }
           />

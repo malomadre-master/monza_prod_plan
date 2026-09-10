@@ -140,5 +140,15 @@ class OrderListOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PlanSlotOut(BaseModel):
+    order_id: int
+    item_id: int
+    customer: str
+    center_code: str
+    volume: Decimal
+    start: date
+    finish: date
+
+
 def linear_from_area(area_m2: Decimal) -> Decimal:
     return (area_m2 * LINEAR_PER_M2).quantize(Decimal("0.01"))

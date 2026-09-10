@@ -72,6 +72,16 @@ export type Attachment = {
 
 export type ItemTypeRow = { value: ItemType; label: string; coeff: string };
 
+export type PlanSlot = {
+  order_id: number;
+  item_id: number;
+  customer: string;
+  center_code: string;
+  volume: string;
+  start: string;
+  finish: string;
+};
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }

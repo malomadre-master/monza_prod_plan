@@ -44,3 +44,14 @@ export function canEditOrders(role: Role): boolean {
 export function canWorkAsDesigner(role: Role): boolean {
   return role === "designer" || role === "admin";
 }
+
+export const CENTER_LABEL: Record<string, string> = {
+  construction: "Конструирование",
+  complectation: "Комплектация",
+  saw: "Пила",
+  edgebanding: "Кромкооблицовка",
+  drilling: "Присадка",
+  milling: "Фрезерование",
+  assembly: "Сборка",
+  qc: "ОТК",
+};
