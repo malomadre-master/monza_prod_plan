@@ -25,6 +25,18 @@ function Protected({ user, children }: { user: User | null; children: React.Reac
   return children;
 }
 
+function ConstructorRoute({ user }: { user: User | null }) {
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canWorkAsDesigner(user.role)) return <Navigate to="/orders" replace />;
+  return <ConstructorPage user={user} />;
+}
+
+function UsersRoute({ user }: { user: User | null }) {
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin") return <Navigate to="/orders" replace />;
+  return <UsersPage />;
+}
+
 export function App() {
   const [opened, { toggle, close }] = useDisclosure();
   const [user, setUser] = useState<User | null>(null);
@@ -48,7 +60,13 @@ export function App() {
     navigate("/login");
   }
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <Text p="md" c="dimmed">
+        Загрузка…
+      </Text>
+    );
+  }
 
   return (
     <AppShell
@@ -109,18 +127,7 @@ export function App() {
       <AppShell.Main>
         <Routes>
           <Route path="/login" element={<LoginPage onLogin={setUser} />} />
-          <Route
-            path="/constructor"
-            element={
-              <Protected user={user}>
-                {canWorkAsDesigner(user!.role) ? (
-                  <ConstructorPage user={user!} />
-                ) : (
-                  <Navigate to="/orders" replace />
-                )}
-              </Protected>
-            }
-          />
+          <Route path="/constructor" element={<ConstructorRoute user={user} />} />
           <Route
             path="/plan"
             element={
@@ -161,14 +168,7 @@ export function App() {
               </Protected>
             }
           />
-          <Route
-            path="/users"
-            element={
-              <Protected user={user}>
-                {user?.role === "admin" ? <UsersPage /> : <Navigate to="/orders" replace />}
-              </Protected>
-            }
-          />
+          <Route path="/users" element={<UsersRoute user={user} />} />
           <Route path="*" element={<Navigate to={user ? "/orders" : "/login"} replace />} />
         </Routes>
       </AppShell.Main>
