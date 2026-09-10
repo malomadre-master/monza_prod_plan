@@ -83,6 +83,18 @@ def test_higher_kpd_finishes_earlier() -> None:
     assert fast_c.finish < slow_c.finish
 
 
+def test_construction_fact_moves_shop_start() -> None:
+    planned = plan_jobs([_job(procurement_needed=False)], constructors=[ConstructorSpec(id=1)])
+    fact = plan_jobs(
+        [_job(procurement_needed=False, construction_done=date(2026, 8, 10))],
+        constructors=[ConstructorSpec(id=1)],
+    )
+    planned_saw = next(row for row in planned if row.center_code == "saw")
+    fact_saw = next(row for row in fact if row.center_code == "saw")
+    assert planned_saw.start == date(2026, 8, 4)
+    assert fact_saw.start == date(2026, 8, 10)
+
+
 def test_holiday_skips_construction_day() -> None:
     holiday = date(2026, 8, 3)
     slots = plan_jobs(

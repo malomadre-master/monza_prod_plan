@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
 from app.catalog import LINEAR_PER_M2, ITEM_TYPE_VALUES, WORK_CENTER_CODES
-from app.models import AttachmentStore, CalendarDayKind, ItemType, OrderStatus, UserRole
+from app.models import AttachmentStore, CalendarDayKind, ItemType, OrderStatus, UserRole, WorkEventKind
 
 
 class LoginIn(BaseModel):
@@ -210,6 +210,56 @@ class AttendancePutIn(BaseModel):
 class AttendanceMonthOut(BaseModel):
     staff: list[StaffOut]
     absences: list[AttendanceMarkOut]
+
+
+class WorkEventIn(BaseModel):
+    order_id: int
+    item_id: int
+    kind: WorkEventKind
+    center_code: str | None = None
+
+
+class WorkEventOut(BaseModel):
+    id: int
+    item_id: int
+    center_code: str
+    kind: WorkEventKind
+    user_id: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TerminalFileOut(BaseModel):
+    id: int
+    original_name: str
+    store: AttachmentStore
+    content_type: str
+    size_bytes: int
+
+
+class TerminalCardOut(BaseModel):
+    order_id: int
+    item_id: int
+    customer: str
+    item_type: ItemType
+    comment: str
+    qty: int
+    area_m2: Decimal
+    linear_m: Decimal
+    order_priority: int
+    item_priority: int
+    launch_date: date
+    center_code: str
+    step_status: str
+    taken_by_id: int | None = None
+    taken_by_name: str | None = None
+    files: list[TerminalFileOut]
+
+
+class TerminalQueueOut(BaseModel):
+    center_code: str
+    cards: list[TerminalCardOut]
 
 
 def linear_from_area(area_m2: Decimal) -> Decimal:

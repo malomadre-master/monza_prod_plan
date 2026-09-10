@@ -100,6 +100,39 @@ export type Attachment = {
 
 export type ItemTypeRow = { value: ItemType; label: string; coeff: string };
 
+export type TerminalCard = {
+  order_id: number;
+  item_id: number;
+  customer: string;
+  item_type: ItemType;
+  comment: string;
+  qty: number;
+  area_m2: string;
+  linear_m: string;
+  order_priority: number;
+  item_priority: number;
+  launch_date: string;
+  center_code: string;
+  step_status: "waiting" | "mine" | "taken";
+  taken_by_id?: number | null;
+  taken_by_name?: string | null;
+  files: Attachment[];
+};
+
+export type TerminalQueue = {
+  center_code: string;
+  cards: TerminalCard[];
+};
+
+export type WorkCenterRow = {
+  code: string;
+  title: string;
+  unit: string;
+  capacity_qty: string;
+  capacity_days: string;
+  is_gate: boolean;
+};
+
 export type PlanSlot = {
   order_id: number;
   item_id: number;

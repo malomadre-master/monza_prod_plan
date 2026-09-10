@@ -49,6 +49,16 @@ export function canManageCalendar(role: Role): boolean {
   return role === "admin" || role === "planner";
 }
 
+export function canUseTerminal(role: Role): boolean {
+  return role === "worker" || role === "supply" || role === "admin" || role === "planner";
+}
+
+export const STEP_STATUS_LABEL: Record<string, string> = {
+  waiting: "В очереди",
+  mine: "У меня",
+  taken: "Взято",
+};
+
 export const CENTER_LABEL: Record<string, string> = {
   construction: "Конструирование",
   complectation: "Комплектация",

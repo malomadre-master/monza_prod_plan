@@ -34,6 +34,12 @@ class CalendarDayKind(StrEnum):
     extra_work = "extra_work"
 
 
+class WorkEventKind(StrEnum):
+    taken = "taken"
+    done = "done"
+    materials_confirmed = "materials_confirmed"
+
+
 class ItemType(StrEnum):
     kitchen = "kitchen"
     wardrobe = "wardrobe"
@@ -147,4 +153,20 @@ class Attendance(Base):
     day: Mapped[date] = mapped_column(Date, index=True)
     present: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    user: Mapped[User] = relationship()
+
+
+class WorkEvent(Base):
+    __tablename__ = "work_events"
+    __table_args__ = (UniqueConstraint("item_id", "center_code", "kind", name="uq_work_event_item_center_kind"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("order_items.id", ondelete="CASCADE"), index=True)
+    center_code: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[WorkEventKind] = mapped_column(Enum(WorkEventKind, name="work_event_kind"))
+    volume: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    item: Mapped[OrderItem] = relationship()
     user: Mapped[User] = relationship()

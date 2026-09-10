@@ -6,7 +6,18 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import Attendance, CalendarDay, CalendarDayKind, Order, OrderStatus, User, UserRole, WorkCenter
+from app.models import (
+    Attendance,
+    CalendarDay,
+    CalendarDayKind,
+    Order,
+    OrderStatus,
+    User,
+    UserRole,
+    WorkCenter,
+    WorkEvent,
+    WorkEventKind,
+)
 from app.schemas import PlanSlotOut
 from scheduler.engine import plan_jobs
 from scheduler.models import CenterSpec, ConstructorSpec, Job
@@ -65,6 +76,9 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
         .filter(Order.status != OrderStatus.draft)
         .all()
     )
+    confirmed: dict[int, date] = {}
+    for event in db.query(WorkEvent).filter(WorkEvent.kind == WorkEventKind.materials_confirmed).all():
+        confirmed[event.item_id] = event.created_at.date()
     jobs: list[Job] = []
     names: dict[int, str] = {}
     for order in orders:
@@ -83,6 +97,8 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
                     area_m2=item.area_m2,
                     linear_m=item.linear_m,
                     procurement_needed=needed,
+                    construction_done=item.construction_done_at.date() if item.construction_done_at else None,
+                    materials_confirmed=confirmed.get(item.id),
                 )
             )
     slots = plan_jobs(

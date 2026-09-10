@@ -30,6 +30,8 @@ class Job:
     area_m2: Decimal
     linear_m: Decimal
     procurement_needed: bool = True
+    construction_done: date | None = None
+    materials_confirmed: date | None = None
 
 
 @dataclass(frozen=True)

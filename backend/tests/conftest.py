@@ -50,6 +50,7 @@ def client(db_session):
             display_name="Станочник",
             password_hash=hash_password("pass"),
             role=UserRole.worker,
+            work_center_code="saw",
             is_active=True,
         )
     )
@@ -68,6 +69,15 @@ def client(db_session):
             display_name="Конструктор Два",
             password_hash=hash_password("pass"),
             role=UserRole.designer,
+            is_active=True,
+        )
+    )
+    db_session.add(
+        User(
+            username="supply1",
+            display_name="Снабженец",
+            password_hash=hash_password("pass"),
+            role=UserRole.supply,
             is_active=True,
         )
     )

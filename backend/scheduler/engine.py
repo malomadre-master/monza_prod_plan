@@ -181,8 +181,10 @@ def plan_jobs(
         _ = person_id
         construction_done[job.order_id] = finish
         for row in siblings:
+            item_finish = row.construction_done or finish
+            item_start = start if row.construction_done is None else min(start, item_finish)
             slots.append(
-                Slot(job.order_id, row.item_id, "construction", Decimal(row.qty), start, finish)
+                Slot(job.order_id, row.item_id, "construction", Decimal(row.qty), item_start, item_finish)
             )
 
         if any(row.procurement_needed for row in siblings):
@@ -190,12 +192,25 @@ def plan_jobs(
             complect_done[job.order_id] = c_finish
             for row in siblings:
                 if row.procurement_needed:
-                    slots.append(Slot(job.order_id, row.item_id, "complectation", Decimal("1"), c_start, c_finish))
+                    fact = row.materials_confirmed
+                    slots.append(
+                        Slot(
+                            job.order_id,
+                            row.item_id,
+                            "complectation",
+                            Decimal("1"),
+                            c_start if fact is None else min(c_start, fact),
+                            fact or c_finish,
+                        )
+                    )
 
     for job in ordered:
-        ready = construction_done[job.order_id]
-        if job.procurement_needed and job.order_id in complect_done:
-            ready = max(ready, complect_done[job.order_id])
+        ready = job.construction_done or construction_done[job.order_id]
+        if job.procurement_needed:
+            if job.materials_confirmed:
+                ready = max(ready, job.materials_confirmed)
+            elif job.order_id in complect_done:
+                ready = max(ready, complect_done[job.order_id])
         cursor = ready
         for code in SHOP_ROUTE:
             spec = specs[code]

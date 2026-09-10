@@ -3,9 +3,10 @@ import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom"
 import { AppShell, Burger, Button, Group, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { api, getToken, setToken, type User } from "./api";
-import { ROLE_LABEL, canEditOrders, canManageCalendar, canWorkAsDesigner } from "./labels";
+import { ROLE_LABEL, canEditOrders, canManageCalendar, canUseTerminal, canWorkAsDesigner } from "./labels";
 import { CalendarPage } from "./pages/CalendarPage";
 import { ConstructorPage } from "./pages/ConstructorPage";
+import { TerminalPage } from "./pages/TerminalPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrderFormPage } from "./pages/OrderFormPage";
 import { OrderViewPage } from "./pages/OrderViewPage";
@@ -30,6 +31,18 @@ function ConstructorRoute({ user }: { user: User | null }) {
   if (!user) return <Navigate to="/login" replace />;
   if (!canWorkAsDesigner(user.role)) return <Navigate to="/orders" replace />;
   return <ConstructorPage user={user} />;
+}
+
+function homePath(user: User | null): string {
+  if (!user) return "/login";
+  if (user.role === "worker" || user.role === "supply") return "/terminal";
+  return "/orders";
+}
+
+function TerminalRoute({ user }: { user: User | null }) {
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canUseTerminal(user.role)) return <Navigate to="/orders" replace />;
+  return <TerminalPage user={user} />;
 }
 
 function CalendarRoute({ user }: { user: User | null }) {
@@ -103,6 +116,11 @@ export function App() {
             <NavLink to="/orders" end onClick={close} style={navStyle}>
               Заказы
             </NavLink>
+            {canUseTerminal(user.role) && (
+              <NavLink to="/terminal" onClick={close} style={navStyle}>
+                Терминал
+              </NavLink>
+            )}
             {canWorkAsDesigner(user.role) && (
               <NavLink to="/constructor" onClick={close} style={navStyle}>
                 Конструктор
@@ -180,9 +198,10 @@ export function App() {
               </Protected>
             }
           />
+          <Route path="/terminal" element={<TerminalRoute user={user} />} />
           <Route path="/calendar" element={<CalendarRoute user={user} />} />
           <Route path="/users" element={<UsersRoute user={user} />} />
-          <Route path="*" element={<Navigate to={user ? "/orders" : "/login"} replace />} />
+          <Route path="*" element={<Navigate to={homePath(user)} replace />} />
         </Routes>
       </AppShell.Main>
     </AppShell>
