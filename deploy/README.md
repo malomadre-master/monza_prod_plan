@@ -20,6 +20,8 @@ Caddy / Let's Encrypt на `:80` **не ставим** — сломает Plitka
 
 Под root. Origin на проде — **SSH**. Нужен отдельный deploy key: GitHub вешает ключ только на одно репо.
 
+`github.com-monza-prod-plan` — **не DNS**, а Host-алиас в `/root/.ssh/config`. Без блока `Host` clone падает с `Could not resolve hostname`. Ключ Fasad/KitchenSimples сюда не подойдёт.
+
 ```bash
 apt-get update && apt-get install -y git openssh-client
 
@@ -59,7 +61,14 @@ curl -s http://127.0.0.1:8083/api/health
 
 ## 2. GitHub Actions
 
-Как у Fasad: тот же `DEPLOY_SSH_KEY` (вход на сервер), свои Variables.
+Два разных ключа:
+
+| Ключ | Зачем | Куда |
+|------|--------|------|
+| `/root/.ssh/github_deploy_monza_prod_plan` | сервер тянет GitHub | Deploy keys репозитория |
+| `DEPLOY_SSH_KEY` | Actions заходят по SSH на telemonza | Secret репозитория; pubkey в `/root/.ssh/authorized_keys` |
+
+Variables (уже можно задать открыто):
 
 | Variable | Значение |
 |----------|----------|
@@ -68,9 +77,16 @@ curl -s http://127.0.0.1:8083/api/health
 | `DEPLOY_PORT` | `22` |
 | `DEPLOY_PATH` | `/opt/monza-prod-plan` |
 
-Secret `DEPLOY_SSH_KEY` — тот же приватный ключ, которым Actions ходят на этот сервер для Fasad (не deploy key репозитория).
+`DEPLOY_SSH_KEY` — **не** deploy key репозитория. Отдельный ключ для входа Actions на сервер. Публичную часть один раз добавить:
 
-После первого setup каждый успешный CI на `main` делает `git pull` + build + `docker compose up`.
+```bash
+# на telemonza
+mkdir -p /root/.ssh
+echo 'ssh-ed25519 … monza-prod-plan-actions' >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+```
+
+После этого каждый успешный CI на `main` (или **Actions → Deploy to Debian → Run workflow**) делает `git pull` + сборку + `docker compose up`.
 
 ## 3. Ручное обновление
 

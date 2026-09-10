@@ -1,9 +1,31 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.db import Base, SessionLocal, engine
+from app.routers import auth, orders, users
+from app.seed import seed_admin
 
-app = FastAPI(title="MONZA Production Planner", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    try:
+        if settings.database_url.startswith("sqlite"):
+            Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_admin(db)
+        finally:
+            db.close()
+    except Exception:
+        # tests / API without a reachable database
+        pass
+    yield
+
+
+app = FastAPI(title="MONZA Production Planner", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,6 +34,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(orders.router)
 
 
 @app.get("/api/health")
