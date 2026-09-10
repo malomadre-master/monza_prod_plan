@@ -1,0 +1,16 @@
+---
+description: MEMORA memory policy — extract only useful facts, classify durable/temporary/contextual, dedup, retrieve before answers, never mix projects or secrets
+alwaysApply: true
+---
+
+# Memory policy (runtime)
+
+Полный текст: `docs/memory-policy.md`. Сохранение — только MCP, без новой БД.
+
+Перед ответом по проекту: retrieval (`memory_digest` / hybrid search) с `tags_all` текущего project-тега. Память цитировать с id, датой и confidence, не как истину.
+
+Перед записью: extraction + privacy. Писать `memory_absorb`. Не писать мусор, CoT, секреты, разовые вопросы. `kind`: durable | temporary (+ `expires_at`) | contextual (обычно не в БД).
+
+«запомни» / «не запоминай» / «забудь» / «это временно» / «это про проект N» — как в политике.
+
+Этот workspace (Prod_Plan_MONZA): prefix `[MONZA]`, тег `project:prod-plan-monza`. Не смешивать с Thermoglass, Telegram-ботом, rem_calcm2, Fasad_Monzana.

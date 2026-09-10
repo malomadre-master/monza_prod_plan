@@ -1,0 +1,26 @@
+---
+description: На этой Windows-машине Shell запускать сразу без песочницы (required_permissions all)
+alwaysApply: true
+---
+
+# Терминал без песочницы
+
+На этом ПК нет backend для filesystem sandbox: Windows helper даёт только network proxy. Команда с политикой `workspace_readwrite` **не стартует** (`Terminal unavailable` / `no working sandbox backend`).
+
+ALWAYS:
+- Любой вызов Shell в этом проекте — сразу с `required_permissions: ["all"]` (отключает sandbox целиком).
+- Не пробовать сначала дефолтный sandbox и не ждать ошибки — сразу `all`.
+- То же для git, gh, npm, python, тестов и любых других команд.
+
+Пример:
+
+```
+Shell(
+  command: "...",
+  required_permissions: ["all"]
+)
+```
+
+NEVER:
+- Не вызывать Shell без `required_permissions: ["all"]`.
+- Не полагаться на `full_network` / `network` вместо `all` — они не обходят отсутствие filesystem sandbox.

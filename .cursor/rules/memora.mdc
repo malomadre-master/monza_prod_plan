@@ -1,0 +1,24 @@
+---
+description: Prod_Plan_MONZA Memora — unique labels [MONZA] and project:prod-plan-monza
+alwaysApply: true
+---
+
+# Memora для Prod_Plan_MONZA
+
+БД общая на `146.66.177.230`, MCP `http://127.0.0.1:8080/mcp`.
+Туннель: `ssh -N -L 8080:127.0.0.1:8080 -p 2224 x79@146.66.177.230`
+
+Это **не** Thermoglass MES, не Telegram-бот, не rem_calcm2 и не Fasad_Monzana.
+
+ALWAYS:
+- Политика: `docs/memory-policy.md`. Писать через `memory_absorb`, не копировать чат.
+- Первая строка: `[MONZA]`
+- Обязательные теги: `project:prod-plan-monza`, `prod-plan-monza/project`
+- Metadata: `"project": "prod-plan-monza"`
+- Поиск: `tags_all: ["project:prod-plan-monza"]`
+- Слой `arch|decision|constraint|glossary|integration|open-question`, источник `doc|user|meeting|code`
+
+NEVER:
+- Не использовать `[TG]`, `[THERMOGLASS-TELEGRAM-BOT]`, `[MEMORA]`, теги `project:thermoglass` / `project:thermoglass-telegram-bot` / `project:memora` / `rem_calcm2/`.
+- Не класть пароли, `.env`, ключи, connection strings.
+- Не писать в локальный `.memora/memories.db` и не ходить на 8080 через curl/SSH кроме туннеля MCP.

@@ -1,0 +1,40 @@
+# Local and server: Postgres + API. Nginx on the Debian host publishes :8083.
+# Do not bind 80/443/8081/8082 — those belong to Plitka / KitchenSimples / Fasad.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-monza}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-monza}
+      POSTGRES_DB: ${POSTGRES_DB:-monza}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monza} -d ${POSTGRES_DB:-monza}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-monza}:${POSTGRES_PASSWORD:-monza}@db:5432/${POSTGRES_DB:-monza}
+    ports:
+      - "127.0.0.1:${API_PORT:-8790}:8790"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - attachments:/app/attachments
+
+volumes:
+  pgdata:
+  attachments:
