@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import Base, SessionLocal, engine
-from app.routers import attachments, auth, orders, plan, users
+from app.routers import attachments, auth, calendar, orders, plan, users
 from app.seed import seed_admin, seed_work_centers
 
 
@@ -41,6 +41,7 @@ app.include_router(users.router)
 app.include_router(orders.router)
 app.include_router(attachments.router)
 app.include_router(plan.router)
+app.include_router(calendar.router)
 
 
 @app.get("/api/health")

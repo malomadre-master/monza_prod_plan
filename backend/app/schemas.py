@@ -3,13 +3,21 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.catalog import LINEAR_PER_M2, ITEM_TYPE_VALUES
-from app.models import AttachmentStore, ItemType, OrderStatus, UserRole
+from app.catalog import LINEAR_PER_M2, ITEM_TYPE_VALUES, WORK_CENTER_CODES
+from app.models import AttachmentStore, CalendarDayKind, ItemType, OrderStatus, UserRole
 
 
 class LoginIn(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=200)
+
+
+def _empty_center(value: str | None) -> str | None:
+    if value is None or value.strip() == "":
+        return None
+    if value not in WORK_CENTER_CODES:
+        raise ValueError("unknown work center")
+    return value
 
 
 class UserOut(BaseModel):
@@ -19,6 +27,7 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     efficiency: Decimal = Decimal("1.00")
+    work_center_code: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -36,6 +45,12 @@ class UserCreateIn(BaseModel):
     role: UserRole
     is_active: bool = True
     efficiency: Decimal = Field(default=Decimal("1.00"), ge=Decimal("0.1"), le=Decimal("2.0"))
+    work_center_code: str | None = None
+
+    @field_validator("work_center_code")
+    @classmethod
+    def known_center_create(cls, value: str | None) -> str | None:
+        return _empty_center(value)
 
 
 class UserPatchIn(BaseModel):
@@ -43,6 +58,12 @@ class UserPatchIn(BaseModel):
     role: UserRole | None = None
     is_active: bool | None = None
     efficiency: Decimal | None = Field(default=None, ge=Decimal("0.1"), le=Decimal("2.0"))
+    work_center_code: str | None = None
+
+    @field_validator("work_center_code")
+    @classmethod
+    def known_center_patch(cls, value: str | None) -> str | None:
+        return _empty_center(value)
 
 
 class OrderItemIn(BaseModel):
@@ -148,6 +169,47 @@ class PlanSlotOut(BaseModel):
     volume: Decimal
     start: date
     finish: date
+
+
+class CalendarDayIn(BaseModel):
+    day: date
+    kind: CalendarDayKind
+    title: str = Field(default="", max_length=120)
+
+
+class CalendarDayOut(BaseModel):
+    day: date
+    kind: CalendarDayKind
+    title: str
+
+    model_config = {"from_attributes": True}
+
+
+class StaffOut(BaseModel):
+    id: int
+    display_name: str
+    role: UserRole
+    efficiency: Decimal
+    work_center_code: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AttendanceMarkOut(BaseModel):
+    user_id: int
+    day: date
+    present: bool
+
+
+class AttendancePutIn(BaseModel):
+    user_id: int
+    day: date
+    present: bool
+
+
+class AttendanceMonthOut(BaseModel):
+    staff: list[StaffOut]
+    absences: list[AttendanceMarkOut]
 
 
 def linear_from_area(area_m2: Decimal) -> Decimal:

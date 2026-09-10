@@ -34,6 +34,7 @@ def create_user(
         role=payload.role,
         is_active=payload.is_active,
         efficiency=payload.efficiency,
+        work_center_code=payload.work_center_code,
     )
     db.add(user)
     db.commit()
@@ -59,6 +60,8 @@ def patch_user(
         user.is_active = payload.is_active
     if payload.efficiency is not None:
         user.efficiency = payload.efficiency
+    if "work_center_code" in payload.model_fields_set:
+        user.work_center_code = payload.work_center_code
     db.commit()
     db.refresh(user)
     return user

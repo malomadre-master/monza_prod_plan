@@ -28,3 +28,10 @@ def test_holiday_is_not_working() -> None:
     holiday = date(2026, 8, 3)
     assert not is_working_day(holiday, holidays={holiday})
     assert first_working_day_on_or_after(holiday, holidays={holiday}) == date(2026, 8, 4)
+
+
+def test_extra_work_makes_saturday_working() -> None:
+    saturday = date(2026, 8, 8)
+    assert not is_working_day(saturday)
+    assert is_working_day(saturday, extra_work={saturday})
+    assert first_working_day_on_or_after(saturday, extra_work={saturday}) == saturday

@@ -3,7 +3,8 @@ import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom"
 import { AppShell, Burger, Button, Group, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { api, getToken, setToken, type User } from "./api";
-import { ROLE_LABEL, canEditOrders, canWorkAsDesigner } from "./labels";
+import { ROLE_LABEL, canEditOrders, canManageCalendar, canWorkAsDesigner } from "./labels";
+import { CalendarPage } from "./pages/CalendarPage";
 import { ConstructorPage } from "./pages/ConstructorPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrderFormPage } from "./pages/OrderFormPage";
@@ -29,6 +30,12 @@ function ConstructorRoute({ user }: { user: User | null }) {
   if (!user) return <Navigate to="/login" replace />;
   if (!canWorkAsDesigner(user.role)) return <Navigate to="/orders" replace />;
   return <ConstructorPage user={user} />;
+}
+
+function CalendarRoute({ user }: { user: User | null }) {
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canManageCalendar(user.role)) return <Navigate to="/orders" replace />;
+  return <CalendarPage />;
 }
 
 function UsersRoute({ user }: { user: User | null }) {
@@ -106,6 +113,11 @@ export function App() {
                 Новый заказ
               </NavLink>
             )}
+            {canManageCalendar(user.role) && (
+              <NavLink to="/calendar" onClick={close} style={navStyle}>
+                Календарь
+              </NavLink>
+            )}
             {user.role === "admin" && (
               <NavLink to="/users" onClick={close} style={navStyle}>
                 Сотрудники
@@ -168,6 +180,7 @@ export function App() {
               </Protected>
             }
           />
+          <Route path="/calendar" element={<CalendarRoute user={user} />} />
           <Route path="/users" element={<UsersRoute user={user} />} />
           <Route path="*" element={<Navigate to={user ? "/orders" : "/login"} replace />} />
         </Routes>

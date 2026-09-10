@@ -1,3 +1,4 @@
+from collections import defaultdict
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
@@ -5,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import Order, OrderStatus, User, UserRole, WorkCenter
+from app.models import Attendance, CalendarDay, CalendarDayKind, Order, OrderStatus, User, UserRole, WorkCenter
 from app.schemas import PlanSlotOut
 from scheduler.engine import plan_jobs
 from scheduler.models import CenterSpec, ConstructorSpec, Job
@@ -35,6 +36,29 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
         ConstructorSpec(id=row.id, efficiency=row.efficiency or Decimal("1"))
         for row in designers
     ]
+    holidays = {
+        row.day for row in db.query(CalendarDay).filter(CalendarDay.kind == CalendarDayKind.holiday).all()
+    }
+    extra_work = {
+        row.day for row in db.query(CalendarDay).filter(CalendarDay.kind == CalendarDayKind.extra_work).all()
+    }
+    absences: dict[int, set] = defaultdict(set)
+    for mark in db.query(Attendance).filter(Attendance.present.is_(False)).all():
+        absences[mark.user_id].add(mark.day)
+    staff_rows = (
+        db.query(User)
+        .filter(User.is_active.is_(True), User.role.in_([UserRole.supply, UserRole.worker]))
+        .all()
+    )
+    center_staff: dict[str, list[tuple[int, Decimal]]] = defaultdict(list)
+    for row in staff_rows:
+        code = row.work_center_code
+        if not code:
+            if row.role == UserRole.supply:
+                code = "complectation"
+            else:
+                continue
+        center_staff[code].append((row.id, row.efficiency or Decimal("1")))
     orders = (
         db.query(Order)
         .options(joinedload(Order.items))
@@ -61,7 +85,15 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
                     procurement_needed=needed,
                 )
             )
-    slots = plan_jobs(jobs, constructors=constructors or None, centers=centers)
+    slots = plan_jobs(
+        jobs,
+        constructors=constructors or None,
+        centers=centers,
+        holidays=holidays or None,
+        extra_work=extra_work or None,
+        absences=dict(absences) or None,
+        center_staff=dict(center_staff) or None,
+    )
     return [
         PlanSlotOut(
             order_id=slot.order_id,

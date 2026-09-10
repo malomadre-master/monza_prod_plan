@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Button, Group, NumberInput, Paper, PasswordInput, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { api, type Role, type User } from "../api";
-import { ROLE_LABEL } from "../labels";
+import { CENTER_LABEL, ROLE_LABEL } from "../labels";
+
+const CENTER_OPTIONS = [
+  { value: "", label: "Участок не задан" },
+  ...Object.entries(CENTER_LABEL).map(([value, label]) => ({ value, label })),
+];
 
 const ROLE_OPTIONS = (Object.keys(ROLE_LABEL) as Role[]).map((value) => ({
   value,
@@ -16,6 +21,7 @@ export function UsersPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("planner");
   const [efficiency, setEfficiency] = useState(1);
+  const [workCenter, setWorkCenter] = useState("");
   const [saving, setSaving] = useState(false);
 
   function reload() {
@@ -39,18 +45,32 @@ export function UsersPage() {
           role,
           is_active: true,
           efficiency: String(efficiency),
+          work_center_code: workCenter || null,
         }),
       });
       setUsername("");
       setDisplayName("");
       setPassword("");
       setEfficiency(1);
+      setWorkCenter("");
       notifications.show({ color: "green", message: "Сотрудник добавлен" });
       reload();
     } catch (error) {
       notifications.show({ color: "red", message: (error as Error).message });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveCenter(user: User, value: string) {
+    try {
+      const updated = await api<User>(`/api/users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ work_center_code: value || null }),
+      });
+      setUsers((current) => current.map((row) => (row.id === user.id ? updated : row)));
+    } catch (error) {
+      notifications.show({ color: "red", message: (error as Error).message });
     }
   }
 
@@ -86,6 +106,7 @@ export function UsersPage() {
               value={efficiency}
               onChange={(v) => setEfficiency(Number(v) || 1)}
             />
+            <Select label="Участок" data={CENTER_OPTIONS} value={workCenter} onChange={(v) => setWorkCenter(v || "")} />
             <Button type="submit" loading={saving}>
               Добавить
             </Button>
@@ -99,6 +120,7 @@ export function UsersPage() {
             <Table.Th>Имя</Table.Th>
             <Table.Th>Роль</Table.Th>
             <Table.Th>КПД</Table.Th>
+            <Table.Th>Участок</Table.Th>
             <Table.Th>Статус</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -120,6 +142,14 @@ export function UsersPage() {
                     const next = Number(v);
                     if (next > 0) void saveEfficiency(user, next);
                   }}
+                />
+              </Table.Td>
+              <Table.Td w={200}>
+                <Select
+                  size="xs"
+                  data={CENTER_OPTIONS}
+                  value={user.work_center_code ?? ""}
+                  onChange={(v) => void saveCenter(user, v || "")}
                 />
               </Table.Td>
               <Table.Td>

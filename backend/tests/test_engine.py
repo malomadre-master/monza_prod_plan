@@ -83,6 +83,44 @@ def test_higher_kpd_finishes_earlier() -> None:
     assert fast_c.finish < slow_c.finish
 
 
+def test_holiday_skips_construction_day() -> None:
+    holiday = date(2026, 8, 3)
+    slots = plan_jobs(
+        [_job(procurement_needed=False)],
+        constructors=[ConstructorSpec(id=1)],
+        holidays={holiday},
+    )
+    construction = next(row for row in slots if row.center_code == "construction")
+    assert construction.start == date(2026, 8, 4)
+    assert construction.finish == date(2026, 8, 5)
+
+
+def test_constructor_absence_skips_that_day() -> None:
+    slots = plan_jobs(
+        [_job(procurement_needed=False)],
+        constructors=[ConstructorSpec(id=1)],
+        absences={1: {date(2026, 8, 3)}},
+    )
+    construction = next(row for row in slots if row.center_code == "construction")
+    assert construction.start == date(2026, 8, 4)
+    assert construction.finish == date(2026, 8, 5)
+
+
+def test_absent_shop_staff_halves_saw_capacity() -> None:
+    jobs = [_job(order_id=1, item_id=1, area_m2=Decimal("100"), linear_m=Decimal("1000"), procurement_needed=False)]
+    full = plan_jobs(jobs, constructors=[ConstructorSpec(id=1)])
+    half = plan_jobs(
+        jobs,
+        constructors=[ConstructorSpec(id=1)],
+        center_staff={"saw": [(10, Decimal("1")), (11, Decimal("1"))]},
+        absences={10: {date(2026, 8, 4)}},
+    )
+    full_saw = next(row for row in full if row.center_code == "saw")
+    half_saw = next(row for row in half if row.center_code == "saw")
+    assert full_saw.start == full_saw.finish
+    assert half_saw.finish > half_saw.start
+
+
 def test_priority_order_goes_first() -> None:
     jobs = [
         _job(order_id=2, item_id=2, order_priority=3, procurement_needed=False),

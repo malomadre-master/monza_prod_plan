@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -29,6 +29,11 @@ class AttachmentStore(StrEnum):
     procurement = "procurement"
 
 
+class CalendarDayKind(StrEnum):
+    holiday = "holiday"
+    extra_work = "extra_work"
+
+
 class ItemType(StrEnum):
     kitchen = "kitchen"
     wardrobe = "wardrobe"
@@ -49,6 +54,7 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), default=UserRole.observer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     efficiency: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=Decimal("1.00"))
+    work_center_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     created_orders: Mapped[list["Order"]] = relationship(back_populates="created_by", foreign_keys="Order.created_by_id")
@@ -121,3 +127,24 @@ class WorkCenter(Base):
     capacity_days: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("1"))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_gate: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class CalendarDay(Base):
+    __tablename__ = "calendar_days"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    kind: Mapped[CalendarDayKind] = mapped_column(Enum(CalendarDayKind, name="calendar_day_kind"))
+    title: Mapped[str] = mapped_column(String(120), default="")
+
+
+class Attendance(Base):
+    __tablename__ = "attendance"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_attendance_user_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    present: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    user: Mapped[User] = relationship()

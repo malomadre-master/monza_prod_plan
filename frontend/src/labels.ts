@@ -45,6 +45,10 @@ export function canWorkAsDesigner(role: Role): boolean {
   return role === "designer" || role === "admin";
 }
 
+export function canManageCalendar(role: Role): boolean {
+  return role === "admin" || role === "planner";
+}
+
 export const CENTER_LABEL: Record<string, string> = {
   construction: "Конструирование",
   complectation: "Комплектация",

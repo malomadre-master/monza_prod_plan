@@ -22,4 +22,16 @@ ROLE_LABELS = {
 }
 
 ORDER_CREATE_ROLES = ("admin", "planner")
+CALENDAR_ROLES = ("admin", "planner")
 LINEAR_PER_M2 = Decimal("10")
+WORK_CENTER_CODES = (
+    "construction",
+    "complectation",
+    "saw",
+    "edgebanding",
+    "drilling",
+    "milling",
+    "assembly",
+    "qc",
+)
+STAFF_ROLES = ("designer", "supply", "worker")

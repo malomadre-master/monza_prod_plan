@@ -5,6 +5,8 @@ export type OrderStatus = "draft" | "queued" | "in_design" | "in_production";
 export type AttachmentStore = "production" | "procurement";
 export type ItemType = "kitchen" | "wardrobe" | "cabinet" | "hallway" | "mirror" | "appliance" | "other";
 
+export type CalendarDayKind = "holiday" | "extra_work";
+
 export type User = {
   id: number;
   username: string;
@@ -12,6 +14,32 @@ export type User = {
   role: Role;
   is_active: boolean;
   efficiency?: string;
+  work_center_code?: string | null;
+};
+
+export type Staff = {
+  id: number;
+  display_name: string;
+  role: Role;
+  efficiency: string;
+  work_center_code?: string | null;
+};
+
+export type CalendarDay = {
+  day: string;
+  kind: CalendarDayKind;
+  title: string;
+};
+
+export type AttendanceMark = {
+  user_id: number;
+  day: string;
+  present: boolean;
+};
+
+export type AttendanceMonth = {
+  staff: Staff[];
+  absences: AttendanceMark[];
 };
 
 export type OrderItem = {
