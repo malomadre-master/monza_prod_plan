@@ -42,6 +42,15 @@ class Slot:
     volume: Decimal
     start: date
     finish: date
+    pinned: bool = False
+
+
+@dataclass(frozen=True)
+class Pin:
+    item_id: int
+    center_code: str
+    start: date
+    finish: date
 
 
 SHOP_ROUTE = ("saw", "edgebanding", "drilling", "milling", "assembly", "qc")

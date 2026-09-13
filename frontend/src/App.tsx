@@ -6,6 +6,7 @@ import { api, getToken, setToken, type User } from "./api";
 import { ROLE_LABEL, canEditOrders, canManageCalendar, canUseTerminal, canWorkAsDesigner } from "./labels";
 import { CalendarPage } from "./pages/CalendarPage";
 import { ConstructorPage } from "./pages/ConstructorPage";
+import { KanbanPage } from "./pages/KanbanPage";
 import { TerminalPage } from "./pages/TerminalPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrderFormPage } from "./pages/OrderFormPage";
@@ -114,6 +115,9 @@ export function App() {
             <NavLink to="/plan" end onClick={close} style={navStyle}>
               Монитор
             </NavLink>
+            <NavLink to="/kanban" end onClick={close} style={navStyle}>
+              Канбан
+            </NavLink>
             <NavLink to="/orders" end onClick={close} style={navStyle}>
               Заказы
             </NavLink>
@@ -163,7 +167,15 @@ export function App() {
             path="/plan"
             element={
               <Protected user={user}>
-                <PlanPage />
+                <PlanPage canPin={canEditOrders(user!.role)} />
+              </Protected>
+            }
+          />
+          <Route
+            path="/kanban"
+            element={
+              <Protected user={user}>
+                <KanbanPage />
               </Protected>
             }
           />

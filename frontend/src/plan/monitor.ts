@@ -84,6 +84,9 @@ export function loadByCell(
 }
 
 export function whyDate(slot: PlanSlot, all: PlanSlot[]): string {
+  if (slot.pinned) {
+    return `Закреплено планировщиком: ${slot.start} → ${slot.finish}`;
+  }
   const same = all.filter((row) => row.item_id === slot.item_id);
   const index = ROUTE_ORDER.indexOf(slot.center_code);
   for (let prev = index - 1; prev >= 0; prev -= 1) {

@@ -170,3 +170,18 @@ class WorkEvent(Base):
 
     item: Mapped[OrderItem] = relationship()
     user: Mapped[User] = relationship()
+
+
+class SchedulePin(Base):
+    __tablename__ = "schedule_pins"
+    __table_args__ = (UniqueConstraint("item_id", "center_code", name="uq_schedule_pin_item_center"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("order_items.id", ondelete="CASCADE"), index=True)
+    center_code: Mapped[str] = mapped_column(String(40), index=True)
+    start: Mapped[date] = mapped_column(Date)
+    finish: Mapped[date] = mapped_column(Date)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    item: Mapped[OrderItem] = relationship()

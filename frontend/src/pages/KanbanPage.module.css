@@ -1,0 +1,44 @@
+.board {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  align-items: flex-start;
+  padding-bottom: 8px;
+}
+
+.column {
+  flex: 0 0 260px;
+  min-height: 280px;
+  background: var(--mantine-color-gray-0);
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: var(--mantine-color-white);
+}
+
+.card:hover {
+  filter: brightness(1.05);
+}
+
+.meta {
+  font-size: 12px;
+  opacity: 0.9;
+}

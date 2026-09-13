@@ -9,6 +9,7 @@ from scheduler.models import (
     CenterSpec,
     ConstructorSpec,
     Job,
+    Pin,
     Slot,
 )
 from scheduler.working_calendar import first_working_day_on_or_after, next_working_day
@@ -101,6 +102,36 @@ class _Load:
         assert start is not None
         return start, last
 
+    def reserve(
+        self,
+        volume: Decimal,
+        start: date,
+        finish: date,
+        holidays: set[date] | None = None,
+        extra_work: set[date] | None = None,
+    ) -> None:
+        days: list[date] = []
+        day = first_working_day_on_or_after(start, holidays, extra_work)
+        scanned = 0
+        while day <= finish:
+            scanned += 1
+            if scanned > MAX_SCAN_DAYS:
+                break
+            days.append(day)
+            nxt = next_working_day(day, holidays, extra_work)
+            if nxt <= day:
+                break
+            day = nxt
+        if not days:
+            if volume > ZERO:
+                self.used[start] += volume
+            return
+        if volume <= ZERO:
+            return
+        share = volume / Decimal(len(days))
+        for row in days:
+            self.used[row] += share
+
 
 def _volume(job: Job, unit: str) -> Decimal:
     if unit == "item":
@@ -127,6 +158,7 @@ def plan_jobs(
     extra_work: set[date] | None = None,
     absences: dict[int, set[date]] | None = None,
     center_staff: dict[str, list[tuple[int, Decimal]]] | None = None,
+    pins: list[Pin] | None = None,
 ) -> list[Slot]:
     """Finite-capacity plan. Construction is per order; shop steps are per item."""
     if not jobs:
@@ -164,8 +196,27 @@ def plan_jobs(
     complect_done: dict[int, date] = {}
 
     orders: dict[int, list[Job]] = defaultdict(list)
+    by_item = {job.item_id: job for job in ordered}
     for job in ordered:
         orders[job.order_id].append(job)
+
+    pin_map = {(row.item_id, row.center_code): row for row in pins or []}
+    reserved_construction: set[int] = set()
+    reserved_complect: set[int] = set()
+    for pin in pin_map.values():
+        job = by_item.get(pin.item_id)
+        if job is None:
+            continue
+        if pin.center_code in shop_loads:
+            spec = specs[pin.center_code]
+            shop_loads[pin.center_code].reserve(_volume(job, spec.unit), pin.start, pin.finish, holidays, extra_work)
+        elif pin.center_code == "complectation" and job.order_id not in reserved_complect:
+            complect_load.reserve(Decimal("1"), pin.start, pin.finish, holidays, extra_work)
+            reserved_complect.add(job.order_id)
+        elif pin.center_code == "construction" and job.order_id not in reserved_construction:
+            volume = sum((Decimal(row.qty) for row in orders[job.order_id]), ZERO)
+            constructor_loads[pool[0].id].reserve(volume, pin.start, pin.finish, holidays, extra_work)
+            reserved_construction.add(job.order_id)
 
     seen_order: set[int] = set()
     for job in ordered:
@@ -173,21 +224,55 @@ def plan_jobs(
             continue
         seen_order.add(job.order_id)
         siblings = orders[job.order_id]
-        volume = sum((Decimal(row.qty) for row in siblings), ZERO)
-        earliest = first_working_day_on_or_after(job.launch_date, holidays, extra_work)
-        person_id, start, finish = _assign_constructor(
-            constructor_loads, volume, earliest, holidays, extra_work
+        construction_pin = next(
+            (pin_map[(row.item_id, "construction")] for row in siblings if (row.item_id, "construction") in pin_map),
+            None,
         )
-        _ = person_id
+        if construction_pin:
+            start, finish = construction_pin.start, construction_pin.finish
+        else:
+            volume = sum((Decimal(row.qty) for row in siblings), ZERO)
+            earliest = first_working_day_on_or_after(job.launch_date, holidays, extra_work)
+            _person_id, start, finish = _assign_constructor(
+                constructor_loads, volume, earliest, holidays, extra_work
+            )
         construction_done[job.order_id] = finish
         for row in siblings:
             item_finish = row.construction_done or finish
             item_start = start if row.construction_done is None else min(start, item_finish)
             slots.append(
-                Slot(job.order_id, row.item_id, "construction", Decimal(row.qty), item_start, item_finish)
+                Slot(
+                    job.order_id,
+                    row.item_id,
+                    "construction",
+                    Decimal(row.qty),
+                    item_start,
+                    item_finish,
+                    pinned=construction_pin is not None,
+                )
             )
 
-        if any(row.procurement_needed for row in siblings):
+        complect_pin = next(
+            (pin_map[(row.item_id, "complectation")] for row in siblings if (row.item_id, "complectation") in pin_map),
+            None,
+        )
+        if complect_pin:
+            complect_done[job.order_id] = complect_pin.finish
+            for row in siblings:
+                if row.procurement_needed:
+                    fact = row.materials_confirmed
+                    slots.append(
+                        Slot(
+                            job.order_id,
+                            row.item_id,
+                            "complectation",
+                            Decimal("1"),
+                            complect_pin.start if fact is None else min(complect_pin.start, fact),
+                            fact or complect_pin.finish,
+                            pinned=True,
+                        )
+                    )
+        elif any(row.procurement_needed for row in siblings):
             c_start, c_finish = complect_load.allocate(Decimal("1"), finish, holidays, extra_work)
             complect_done[job.order_id] = c_finish
             for row in siblings:
@@ -215,9 +300,14 @@ def plan_jobs(
         for code in SHOP_ROUTE:
             spec = specs[code]
             volume = _volume(job, spec.unit)
-            start, finish = shop_loads[code].allocate(volume, cursor, holidays, extra_work)
-            slots.append(Slot(job.order_id, job.item_id, code, volume, start, finish))
-            cursor = finish
+            pin = pin_map.get((job.item_id, code))
+            if pin:
+                slots.append(Slot(job.order_id, job.item_id, code, volume, pin.start, pin.finish, pinned=True))
+                cursor = pin.finish
+            else:
+                start, finish = shop_loads[code].allocate(volume, cursor, holidays, extra_work)
+                slots.append(Slot(job.order_id, job.item_id, code, volume, start, finish))
+                cursor = finish
     return slots
 
 

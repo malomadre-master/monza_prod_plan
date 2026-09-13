@@ -100,8 +100,8 @@
   filter: brightness(1.08);
 }
 
-.overdue {
-  box-shadow: inset 3px 0 0 #c92a2a;
+.pinned {
+  box-shadow: inset 0 0 0 2px #fff, inset 3px 0 0 #1c7ed6;
 }
 
 .load {

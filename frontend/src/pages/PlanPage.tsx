@@ -5,14 +5,17 @@ import {
   Button,
   Drawer,
   Group,
+  Modal,
   SegmentedControl,
   Stack,
   Table,
   Tabs,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
-import { api, type CalendarDay, type PlanSlot, type WorkCenterRow } from "../api";
+import { notifications } from "@mantine/notifications";
+import { api, type CalendarDay, type PlanPreview, type PlanSlot, type WorkCenterRow } from "../api";
 import { CENTER_LABEL, itemLabel, ITEM_FALLBACK } from "../labels";
 import {
   addDays,
@@ -37,7 +40,7 @@ import {
 } from "../plan/monitor";
 import classes from "./PlanPage.module.css";
 
-export function PlanPage() {
+export function PlanPage({ canPin = false }: { canPin?: boolean }) {
   const [slots, setSlots] = useState<PlanSlot[]>([]);
   const [centers, setCenters] = useState<WorkCenterRow[]>([]);
   const [holidays, setHolidays] = useState<Set<string>>(new Set());
@@ -48,6 +51,11 @@ export function PlanPage() {
   const [anchor, setAnchor] = useState(todayISO);
   const [selected, setSelected] = useState<PlanSlot | null>(null);
   const [dayOpen, setDayOpen] = useState<string | null>(null);
+  const [pinStart, setPinStart] = useState("");
+  const [pinFinish, setPinFinish] = useState("");
+  const [preview, setPreview] = useState<PlanPreview | null>(null);
+  const [previewRemove, setPreviewRemove] = useState(false);
+  const [saving, setSaving] = useState(false);
   const today = todayISO();
 
   useEffect(() => {
@@ -59,6 +67,12 @@ export function PlanPage() {
       })
       .catch((err: Error) => setError(err.message));
   }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    setPinStart(selected.start);
+    setPinFinish(selected.finish);
+  }, [selected]);
 
   useEffect(() => {
     const from = addDays(monthStart(anchor), -7);
@@ -106,13 +120,68 @@ export function PlanPage() {
   const daySlots = dayOpen ? slots.filter((row) => row.start <= dayOpen && dayOpen <= row.finish) : [];
   const chain = selected ? itemChain(selected, slots) : [];
 
+  async function requestPreview(remove = false) {
+    if (!selected) return;
+    try {
+      const data = await api<PlanPreview>("/api/plan/pins/preview", {
+        method: "POST",
+        body: JSON.stringify({
+          item_id: selected.item_id,
+          center_code: selected.center_code,
+          start: remove ? undefined : pinStart,
+          finish: remove ? undefined : pinFinish,
+          remove,
+        }),
+      });
+      setPreviewRemove(remove);
+      setPreview(data);
+    } catch (err) {
+      notifications.show({ color: "red", title: "Предпросмотр не получен", message: (err as Error).message });
+    }
+  }
+
+  async function applyPreview() {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      const data = await api<PlanPreview>("/api/plan/pins", {
+        method: "PUT",
+        body: JSON.stringify({
+          item_id: selected.item_id,
+          center_code: selected.center_code,
+          start: previewRemove ? undefined : pinStart,
+          finish: previewRemove ? undefined : pinFinish,
+          remove: previewRemove,
+        }),
+      });
+      setSlots(data.slots);
+      const next = data.slots.find(
+        (row) => row.item_id === selected.item_id && row.center_code === selected.center_code,
+      );
+      if (next) {
+        setSelected(next);
+        setPinStart(next.start);
+        setPinFinish(next.finish);
+      }
+      setPreview(null);
+      notifications.show({
+        color: "teal",
+        message: previewRemove ? "Закрепление снято" : "Блок закреплён, незакреплённые слоты пересчитаны",
+      });
+    } catch (err) {
+      notifications.show({ color: "red", title: "Не удалось применить", message: (err as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Stack gap="md">
       <Group justify="space-between" align="flex-start">
         <div>
           <Title order={2}>Монитор</Title>
           <Text c="dimmed" size="sm">
-            Участки по дням, цвет — заказ, процент — загрузка мощности. Канбан и закрепление блоков — следующим шагом.
+            Участки по дням, цвет — заказ, процент — загрузка мощности. Белая обводка — закреплённый блок.
           </Text>
         </div>
         <Group>
@@ -178,6 +247,7 @@ export function PlanPage() {
             <Group gap="xs">
               <Badge color={orderColor(selected.order_id)}>заказ приоритет {selected.order_priority}</Badge>
               <Badge variant="light">изделие приоритет {selected.item_priority}</Badge>
+              {selected.pinned && <Badge color="blue">закреплено</Badge>}
               {isOverdue(selected) && <Badge color="red">план позже сегодняшнего</Badge>}
             </Group>
             <Text>
@@ -185,6 +255,20 @@ export function PlanPage() {
               {selected.volume}
             </Text>
             <Text size="sm">{whyDate(selected, slots)}</Text>
+            {canPin && (
+              <Stack gap="xs">
+                <Group grow>
+                  <TextInput type="date" label="Старт" value={pinStart} onChange={(event) => setPinStart(event.currentTarget.value)} />
+                  <TextInput type="date" label="Финиш" value={pinFinish} onChange={(event) => setPinFinish(event.currentTarget.value)} />
+                </Group>
+                <Button onClick={() => requestPreview(false)}>Предпросмотр закрепления</Button>
+                {selected.pinned && (
+                  <Button variant="light" color="red" onClick={() => requestPreview(true)}>
+                    Снять закрепление
+                  </Button>
+                )}
+              </Stack>
+            )}
             <Text size="sm" c="dimmed">
               Цепочка изделия
             </Text>
@@ -200,6 +284,60 @@ export function PlanPage() {
           </Stack>
         )}
       </Drawer>
+
+      <Modal opened={Boolean(preview)} onClose={() => setPreview(null)} title="Пересчёт плана" size="lg">
+        {preview && (
+          <Stack>
+            <Text size="sm">
+              {previewRemove
+                ? "Снятие закрепления. Незакреплённые слоты пересчитаются."
+                : "Закреплённый блок станет жёстким ограничением, остальные сдвинутся вокруг."}
+            </Text>
+            {preview.changes.length === 0 ? (
+              <Text c="dimmed">Даты слотов не изменятся.</Text>
+            ) : (
+              <Table.ScrollContainer minWidth={520}>
+                <Table striped>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Заказчик</Table.Th>
+                      <Table.Th>Участок</Table.Th>
+                      <Table.Th>Было</Table.Th>
+                      <Table.Th>Станет</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {preview.changes.map((row) => (
+                      <Table.Tr key={`${row.item_id}-${row.center_code}`}>
+                        <Table.Td>
+                          {row.customer} #{row.item_id}
+                        </Table.Td>
+                        <Table.Td>{CENTER_LABEL[row.center_code] ?? row.center_code}</Table.Td>
+                        <Table.Td>
+                          {row.before_start ?? "—"}
+                          {row.before_finish ? ` → ${row.before_finish}` : ""}
+                        </Table.Td>
+                        <Table.Td>
+                          {row.after_start ?? "—"}
+                          {row.after_finish ? ` → ${row.after_finish}` : ""}
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setPreview(null)}>
+                Отмена
+              </Button>
+              <Button loading={saving} onClick={applyPreview}>
+                Применить
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
 
       <Drawer
         opened={Boolean(dayOpen)}
@@ -335,7 +473,7 @@ function MonitorGrid({
                   <button
                     key={`${slot.item_id}-${slot.center_code}-${slot.start}`}
                     type="button"
-                    className={`${classes.block} ${isOverdue(slot) ? classes.overdue : ""}`}
+                    className={`${classes.block} ${isOverdue(slot) ? classes.overdue : ""} ${slot.pinned ? classes.pinned : ""}`}
                     style={{
                       left: `calc((100% / ${days.length}) * ${span.start} + 2px)`,
                       width: `calc((100% / ${days.length}) * ${span.end - span.start + 1} - 4px)`,
@@ -347,7 +485,7 @@ function MonitorGrid({
                       event.stopPropagation();
                       onSlot(slot);
                     }}
-                    title={`${slot.customer} · ${CENTER_LABEL[slot.center_code]}`}
+                    title={`${slot.customer} · ${CENTER_LABEL[slot.center_code]}${slot.pinned ? " · закреплено" : ""}`}
                   >
                     {slot.customer} · {itemLabel(ITEM_FALLBACK, slot.item_type)}
                   </button>

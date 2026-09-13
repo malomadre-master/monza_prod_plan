@@ -146,6 +146,44 @@ export type PlanSlot = {
   order_priority: number;
   item_priority: number;
   launch_date: string;
+  pinned?: boolean;
+};
+
+export type PlanDiffRow = {
+  order_id: number;
+  item_id: number;
+  customer: string;
+  center_code: string;
+  before_start: string | null;
+  before_finish: string | null;
+  after_start: string | null;
+  after_finish: string | null;
+};
+
+export type PlanPreview = {
+  changes: PlanDiffRow[];
+  slots: PlanSlot[];
+};
+
+export type BoardStatus = "waiting" | "in_progress" | "done";
+
+export type BoardCard = {
+  order_id: number;
+  item_id: number;
+  customer: string;
+  item_type: ItemType;
+  qty: number;
+  comment: string;
+  order_priority: number;
+  item_priority: number;
+  launch_date: string;
+  order_status: OrderStatus;
+  center_code: string;
+  board_status: BoardStatus;
+  taken_by_name?: string | null;
+  start?: string | null;
+  finish?: string | null;
+  volume?: string | null;
 };
 
 export function getToken(): string | null {

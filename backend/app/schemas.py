@@ -174,6 +174,50 @@ class PlanSlotOut(BaseModel):
     order_priority: int
     item_priority: int
     launch_date: date
+    pinned: bool = False
+
+
+class PinIn(BaseModel):
+    item_id: int
+    center_code: str
+    start: date | None = None
+    finish: date | None = None
+    remove: bool = False
+
+
+class PlanDiffRow(BaseModel):
+    order_id: int
+    item_id: int
+    customer: str
+    center_code: str
+    before_start: date | None = None
+    before_finish: date | None = None
+    after_start: date | None = None
+    after_finish: date | None = None
+
+
+class PlanPreviewOut(BaseModel):
+    changes: list[PlanDiffRow]
+    slots: list[PlanSlotOut]
+
+
+class BoardCardOut(BaseModel):
+    order_id: int
+    item_id: int
+    customer: str
+    item_type: ItemType
+    qty: int
+    comment: str
+    order_priority: int
+    item_priority: int
+    launch_date: date
+    order_status: OrderStatus
+    center_code: str
+    board_status: str
+    taken_by_name: str | None = None
+    start: date | None = None
+    finish: date | None = None
+    volume: Decimal | None = None
 
 
 class CalendarDayIn(BaseModel):

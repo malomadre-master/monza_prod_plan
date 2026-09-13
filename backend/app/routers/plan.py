@@ -2,32 +2,38 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.catalog import ORDER_CREATE_ROLES, WORK_CENTER_CODES
 from app.db import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_roles
 from app.models import (
     Attendance,
     CalendarDay,
     CalendarDayKind,
     Order,
+    OrderItem,
     OrderStatus,
+    SchedulePin,
     User,
     UserRole,
     WorkCenter,
     WorkEvent,
     WorkEventKind,
 )
-from app.schemas import PlanSlotOut
+from app.schemas import BoardCardOut, PinIn, PlanDiffRow, PlanPreviewOut, PlanSlotOut
 from scheduler.engine import plan_jobs
-from scheduler.models import CenterSpec, ConstructorSpec, Job
+from scheduler.models import SHOP_ROUTE, CenterSpec, ConstructorSpec, Job, Pin
 
 router = APIRouter(prefix="/api", tags=["plan"])
 
 
-@router.get("/plan", response_model=list[PlanSlotOut])
-def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[PlanSlotOut]:
+def _db_pins(db: Session) -> list[Pin]:
+    return [Pin(row.item_id, row.center_code, row.start, row.finish) for row in db.query(SchedulePin).all()]
+
+
+def _plan_slots(db: Session, pins: list[Pin] | None = None) -> list[PlanSlotOut]:
     centers = [
         CenterSpec(
             code=row.code,
@@ -104,6 +110,8 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
                     materials_confirmed=confirmed.get(item.id),
                 )
             )
+    pin_list = pins if pins is not None else _db_pins(db)
+    pin_keys = {(row.item_id, row.center_code) for row in pin_list}
     slots = plan_jobs(
         jobs,
         constructors=constructors or None,
@@ -112,6 +120,7 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
         extra_work=extra_work or None,
         absences=dict(absences) or None,
         center_staff=dict(center_staff) or None,
+        pins=pin_list or None,
     )
     result: list[PlanSlotOut] = []
     for slot in slots:
@@ -130,6 +139,212 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
                 order_priority=order_priority,
                 item_priority=item_priority,
                 launch_date=launch_date,
+                pinned=slot.pinned or (slot.item_id, slot.center_code) in pin_keys,
             )
         )
     return result
+
+
+def _event_map(db: Session, item_ids: list[int]) -> dict[tuple[int, str, WorkEventKind], WorkEvent]:
+    if not item_ids:
+        return {}
+    rows = (
+        db.query(WorkEvent)
+        .options(joinedload(WorkEvent.user))
+        .filter(WorkEvent.item_id.in_(item_ids))
+        .all()
+    )
+    return {(row.item_id, row.center_code, row.kind): row for row in rows}
+
+
+def _board_step(
+    item: OrderItem, events: dict[tuple[int, str, WorkEventKind], WorkEvent]
+) -> tuple[str, str, str | None]:
+    order = item.order
+    if item.construction_done_at is None:
+        if order.claimed_by_id:
+            name = order.claimed_by.display_name if order.claimed_by else None
+            return "construction", "in_progress", name
+        return "construction", "waiting", None
+    needed = True if item.procurement_needed is None else item.procurement_needed
+    if needed and (item.id, "complectation", WorkEventKind.materials_confirmed) not in events:
+        return "complectation", "waiting", None
+    for center in SHOP_ROUTE:
+        if (item.id, center, WorkEventKind.done) in events:
+            continue
+        taken = events.get((item.id, center, WorkEventKind.taken))
+        if taken:
+            name = taken.user.display_name if taken.user else None
+            return center, "in_progress", name
+        return center, "waiting", None
+    return "qc", "done", None
+
+
+@router.get("/plan", response_model=list[PlanSlotOut])
+def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[PlanSlotOut]:
+    return _plan_slots(db)
+
+
+@router.get("/plan/board", response_model=list[BoardCardOut])
+def get_plan_board(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> list[BoardCardOut]:
+    slots = {(row.item_id, row.center_code): row for row in _plan_slots(db)}
+    orders = (
+        db.query(Order)
+        .options(selectinload(Order.items), joinedload(Order.claimed_by))
+        .filter(Order.status != OrderStatus.draft)
+        .all()
+    )
+    items = [item for order in orders for item in order.items]
+    events = _event_map(db, [item.id for item in items])
+    cards: list[BoardCardOut] = []
+    for item in items:
+        center, board_status, taken_by = _board_step(item, events)
+        planned = slots.get((item.id, center))
+        cards.append(
+            BoardCardOut(
+                order_id=item.order_id,
+                item_id=item.id,
+                customer=item.order.customer,
+                item_type=item.item_type,
+                qty=item.qty,
+                comment=item.comment,
+                order_priority=item.order.priority,
+                item_priority=item.priority,
+                launch_date=item.order.launch_date,
+                order_status=item.order.status,
+                center_code=center,
+                board_status=board_status,
+                taken_by_name=taken_by,
+                start=planned.start if planned else None,
+                finish=planned.finish if planned else None,
+                volume=planned.volume if planned else None,
+            )
+        )
+    cards.sort(
+        key=lambda row: (
+            row.order_priority,
+            row.item_priority,
+            row.launch_date,
+            row.order_id,
+            row.item_id,
+        )
+    )
+    return cards
+
+
+def _plan_diff(before: list[PlanSlotOut], after: list[PlanSlotOut]) -> list[PlanDiffRow]:
+    before_map = {(row.item_id, row.center_code): row for row in before}
+    after_map = {(row.item_id, row.center_code): row for row in after}
+    keys = sorted(set(before_map) | set(after_map))
+    changes: list[PlanDiffRow] = []
+    for key in keys:
+        old = before_map.get(key)
+        new = after_map.get(key)
+        if old is None or new is None or old.start != new.start or old.finish != new.finish:
+            src = new or old
+            assert src is not None
+            changes.append(
+                PlanDiffRow(
+                    order_id=src.order_id,
+                    item_id=src.item_id,
+                    customer=src.customer,
+                    center_code=src.center_code,
+                    before_start=old.start if old else None,
+                    before_finish=old.finish if old else None,
+                    after_start=new.start if new else None,
+                    after_finish=new.finish if new else None,
+                )
+            )
+    return changes
+
+
+def _resolve_pin_dates(payload: PinIn, current: list[PlanSlotOut]) -> tuple[date, date]:
+    found = next(
+        (row for row in current if row.item_id == payload.item_id and row.center_code == payload.center_code),
+        None,
+    )
+    start = payload.start or (found.start if found else None)
+    finish = payload.finish or (found.finish if found else None)
+    if start is None or finish is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Нет слота для закрепления")
+    if finish < start:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Финиш раньше старта")
+    return start, finish
+
+
+def _proposed_pins(db: Session, payload: PinIn, current: list[PlanSlotOut]) -> list[Pin]:
+    existing = [row for row in _db_pins(db) if not (row.item_id == payload.item_id and row.center_code == payload.center_code)]
+    if payload.remove:
+        return existing
+    start, finish = _resolve_pin_dates(payload, current)
+    existing.append(Pin(payload.item_id, payload.center_code, start, finish))
+    return existing
+
+
+def _require_item(db: Session, payload: PinIn) -> OrderItem:
+    if payload.center_code not in WORK_CENTER_CODES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неизвестный участок")
+    item = db.query(OrderItem).options(joinedload(OrderItem.order)).filter(OrderItem.id == payload.item_id).one_or_none()
+    if item is None or item.order.status == OrderStatus.draft:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Изделие не найдено")
+    return item
+
+
+@router.post("/plan/pins/preview", response_model=PlanPreviewOut)
+def preview_pin(
+    payload: PinIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+) -> PlanPreviewOut:
+    _require_item(db, payload)
+    current = _plan_slots(db)
+    proposed = _plan_slots(db, pins=_proposed_pins(db, payload, current))
+    return PlanPreviewOut(changes=_plan_diff(current, proposed), slots=proposed)
+
+
+@router.put("/plan/pins", response_model=PlanPreviewOut)
+def apply_pin(
+    payload: PinIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+) -> PlanPreviewOut:
+    item = _require_item(db, payload)
+    current = _plan_slots(db)
+    proposed_pins = _proposed_pins(db, payload, current)
+    row = (
+        db.query(SchedulePin)
+        .filter(SchedulePin.item_id == payload.item_id, SchedulePin.center_code == payload.center_code)
+        .one_or_none()
+    )
+    if payload.remove:
+        if row is not None:
+            db.delete(row)
+            db.commit()
+    else:
+        start, finish = _resolve_pin_dates(payload, current)
+        if row is None:
+            db.add(
+                SchedulePin(
+                    item_id=item.id,
+                    center_code=payload.center_code,
+                    start=start,
+                    finish=finish,
+                    created_by_id=user.id,
+                )
+            )
+        else:
+            row.start = start
+            row.finish = finish
+        db.commit()
+    after = _plan_slots(db, pins=proposed_pins)
+    return PlanPreviewOut(changes=_plan_diff(current, after), slots=after)
+
+
+@router.delete("/plan/pins/{item_id}/{center_code}", response_model=PlanPreviewOut)
+def delete_pin(
+    item_id: int,
+    center_code: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+) -> PlanPreviewOut:
+    return apply_pin(PinIn(item_id=item_id, center_code=center_code, remove=True), db, user)

@@ -59,6 +59,18 @@ export const STEP_STATUS_LABEL: Record<string, string> = {
   taken: "Взято",
 };
 
+export const BOARD_STATUS_LABEL: Record<string, string> = {
+  waiting: "Не распределено",
+  in_progress: "В работе",
+  done: "Готово",
+};
+
+export const BOARD_STATUS_COLOR: Record<string, string> = {
+  waiting: "gray",
+  in_progress: "blue",
+  done: "teal",
+};
+
 export const CENTER_LABEL: Record<string, string> = {
   construction: "Конструирование",
   complectation: "Комплектация",

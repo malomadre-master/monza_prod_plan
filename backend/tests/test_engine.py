@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from scheduler.engine import display_days, duration_days, plan_jobs
-from scheduler.models import ConstructorSpec, Job
+from scheduler.models import ConstructorSpec, Job, Pin
 
 
 def _job(**kwargs) -> Job:
@@ -142,3 +142,33 @@ def test_priority_order_goes_first() -> None:
     cons = {row.order_id: row for row in slots if row.center_code == "construction"}
     assert cons[1].start <= cons[2].start
     assert cons[1].finish <= cons[2].start
+
+
+def test_pinned_saw_keeps_date_and_others_move_around() -> None:
+    jobs = [
+        _job(order_id=1, item_id=1, area_m2=Decimal("100"), linear_m=Decimal("1000"), procurement_needed=False),
+        _job(order_id=2, item_id=2, order_priority=2, area_m2=Decimal("100"), linear_m=Decimal("1000"), procurement_needed=False),
+    ]
+    constructors = [ConstructorSpec(id=1), ConstructorSpec(id=2)]
+    free = plan_jobs(jobs, constructors=constructors)
+    first_saw = next(row for row in free if row.item_id == 1 and row.center_code == "saw")
+    pinned = plan_jobs(
+        jobs,
+        constructors=constructors,
+        pins=[Pin(item_id=2, center_code="saw", start=first_saw.start, finish=first_saw.finish)],
+    )
+    saw = {row.item_id: row for row in pinned if row.center_code == "saw"}
+    assert saw[2].start == first_saw.start
+    assert saw[2].pinned is True
+    assert saw[1].start > saw[2].start
+
+
+def test_unpinning_restores_priority_order() -> None:
+    jobs = [
+        _job(order_id=1, item_id=1, area_m2=Decimal("100"), linear_m=Decimal("1000"), procurement_needed=False),
+        _job(order_id=2, item_id=2, order_priority=2, area_m2=Decimal("100"), linear_m=Decimal("1000"), procurement_needed=False),
+    ]
+    constructors = [ConstructorSpec(id=1), ConstructorSpec(id=2)]
+    free = plan_jobs(jobs, constructors=constructors)
+    first_saw = next(row for row in free if row.item_id == 1 and row.center_code == "saw")
+    assert first_saw.pinned is False
