@@ -1,0 +1,115 @@
+.wrap {
+  overflow: auto;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 8px;
+  background: var(--mantine-color-body);
+}
+
+.header,
+.row {
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  min-width: max-content;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--mantine-color-body);
+  border-bottom: 1px solid var(--mantine-color-gray-3);
+}
+
+.label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  padding: 8px 10px;
+  background: var(--mantine-color-body);
+  border-right: 1px solid var(--mantine-color-gray-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.track {
+  display: grid;
+  position: relative;
+}
+
+.dayHead,
+.cell {
+  min-width: 64px;
+  border-left: 1px solid var(--mantine-color-gray-2);
+  text-align: center;
+}
+
+.dayHead {
+  padding: 6px 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dayHead:hover {
+  background: var(--mantine-color-gray-0);
+}
+
+.todayHead {
+  background: var(--mantine-color-yellow-1);
+  font-weight: 700;
+}
+
+.weekend {
+  background: var(--mantine-color-gray-0);
+}
+
+.holiday {
+  background: var(--mantine-color-red-0);
+}
+
+.cell {
+  min-height: 64px;
+}
+
+.todayCell {
+  background: var(--mantine-color-yellow-0);
+}
+
+.hot {
+  background: var(--mantine-color-red-1);
+}
+
+.warm {
+  background: var(--mantine-color-orange-0);
+}
+
+.block {
+  position: absolute;
+  z-index: 1;
+  border: 0;
+  border-radius: 4px;
+  padding: 2px 6px;
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  color: white;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.block:hover {
+  filter: brightness(1.08);
+}
+
+.overdue {
+  box-shadow: inset 3px 0 0 #c92a2a;
+}
+
+.load {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  z-index: 0;
+  font-size: 10px;
+  color: var(--mantine-color-gray-6);
+  pointer-events: none;
+}

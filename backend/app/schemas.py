@@ -169,6 +169,11 @@ class PlanSlotOut(BaseModel):
     volume: Decimal
     start: date
     finish: date
+    item_type: ItemType
+    qty: int
+    order_priority: int
+    item_priority: int
+    launch_date: date
 
 
 class CalendarDayIn(BaseModel):

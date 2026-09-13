@@ -22,7 +22,13 @@ export function LoginPage({ onLogin }: { onLogin: (user: User) => void }) {
       });
       setToken(data.access_token);
       onLogin(data.user);
-      navigate(data.user.role === "worker" || data.user.role === "supply" ? "/terminal" : "/orders");
+      const home =
+        data.user.role === "worker" || data.user.role === "supply"
+          ? "/terminal"
+          : data.user.role === "designer"
+            ? "/constructor"
+            : "/plan";
+      navigate(home);
     } catch (error) {
       notifications.show({ color: "red", title: "Вход не выполнен", message: (error as Error).message });
     } finally {

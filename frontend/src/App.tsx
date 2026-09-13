@@ -36,7 +36,8 @@ function ConstructorRoute({ user }: { user: User | null }) {
 function homePath(user: User | null): string {
   if (!user) return "/login";
   if (user.role === "worker" || user.role === "supply") return "/terminal";
-  return "/orders";
+  if (user.role === "designer") return "/constructor";
+  return "/plan";
 }
 
 function TerminalRoute({ user }: { user: User | null }) {
@@ -111,7 +112,7 @@ export function App() {
         {user ? (
           <>
             <NavLink to="/plan" end onClick={close} style={navStyle}>
-              План
+              Монитор
             </NavLink>
             <NavLink to="/orders" end onClick={close} style={navStyle}>
               Заказы

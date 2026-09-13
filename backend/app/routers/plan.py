@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
@@ -81,10 +82,12 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
         confirmed[event.item_id] = event.created_at.date()
     jobs: list[Job] = []
     names: dict[int, str] = {}
+    item_meta: dict[int, tuple] = {}
     for order in orders:
         names[order.id] = order.customer
         for item in order.items:
             needed = True if item.procurement_needed is None else item.procurement_needed
+            item_meta[item.id] = (item.item_type, item.qty, order.priority, item.priority, order.launch_date)
             jobs.append(
                 Job(
                     order_id=order.id,
@@ -110,15 +113,23 @@ def get_plan(db: Session = Depends(get_db), _: User = Depends(get_current_user))
         absences=dict(absences) or None,
         center_staff=dict(center_staff) or None,
     )
-    return [
-        PlanSlotOut(
-            order_id=slot.order_id,
-            item_id=slot.item_id,
-            customer=names[slot.order_id],
-            center_code=slot.center_code,
-            volume=slot.volume,
-            start=slot.start,
-            finish=slot.finish,
+    result: list[PlanSlotOut] = []
+    for slot in slots:
+        item_type, qty, order_priority, item_priority, launch_date = item_meta[slot.item_id]
+        result.append(
+            PlanSlotOut(
+                order_id=slot.order_id,
+                item_id=slot.item_id,
+                customer=names[slot.order_id],
+                center_code=slot.center_code,
+                volume=slot.volume,
+                start=slot.start,
+                finish=slot.finish,
+                item_type=item_type,
+                qty=qty,
+                order_priority=order_priority,
+                item_priority=item_priority,
+                launch_date=launch_date,
+            )
         )
-        for slot in slots
-    ]
+    return result

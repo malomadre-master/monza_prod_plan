@@ -1,26 +1,26 @@
 ---
-description: На этой Windows-машине Shell запускать сразу без песочницы (required_permissions all)
+description: Этот Windows-ПК — без песочницы для Shell и браузера (localhost как на основном ПК)
 alwaysApply: true
 ---
 
-# Терминал без песочницы
+# Без песочницы: терминал и браузер
 
-На этом ПК нет backend для filesystem sandbox: Windows helper даёт только network proxy. Команда с политикой `workspace_readwrite` **не стартует** (`Terminal unavailable` / `no working sandbox backend`).
+На этом ПК нет backend для filesystem sandbox: Windows helper даёт только network proxy. Команда с политикой `workspace_readwrite` **не стартует** (`Terminal unavailable` / `no working sandbox backend`). Встроенный браузер Cursor ходит на тот же localhost, что и пользователь, а не в изолированную песочницу.
 
 ALWAYS:
-- Любой вызов Shell в этом проекте — сразу с `required_permissions: ["all"]` (отключает sandbox целиком).
-- Не пробовать сначала дефолтный sandbox и не ждать ошибки — сразу `all`.
-- То же для git, gh, npm, python, тестов и любых других команд.
+- Любой Shell — сразу `required_permissions: ["all"]`. Не пробовать sandbox и не ждать ошибки.
+- То же для git, gh, npm, python, тестов, uvicorn, Vite.
+- Проверка UI: `browser_navigate` на `http://127.0.0.1:5173/` или стенд `:8083`. `chrome-error` — это сбой вкладки, не запрет localhost. Повторить на `127.0.0.1` и `localhost`, вкладка `position: "active"`.
+- Не писать в ответ, что «встроенный браузер не достаёт до localhost из-за песочницы».
 
 Пример:
 
 ```
-Shell(
-  command: "...",
-  required_permissions: ["all"]
-)
+Shell(command: "...", required_permissions: ["all"])
+browser_navigate(url: "http://127.0.0.1:5173/", position: "active")
 ```
 
 NEVER:
-- Не вызывать Shell без `required_permissions: ["all"]`.
-- Не полагаться на `full_network` / `network` вместо `all` — они не обходят отсутствие filesystem sandbox.
+- Shell без `required_permissions: ["all"]`.
+- `full_network` / `network` вместо `all`.
+- Пропускать проверку UI только потому, что первая навигация дала `chrome-error`.

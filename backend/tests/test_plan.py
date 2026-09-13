@@ -13,5 +13,11 @@ def test_plan_has_linear_route(client) -> None:
     assert codes[0] == "construction"
     assert "complectation" in codes
     assert codes[-1] == "qc"
-    assert plan.json()[0]["customer"] == "Иванов"
-    assert plan.json()[0]["start"] == "2026-09-10"
+    first = plan.json()[0]
+    assert first["customer"] == "Иванов"
+    assert first["start"] == "2026-09-10"
+    assert first["item_type"] == "kitchen"
+    assert first["qty"] == 1
+    assert first["order_priority"] == 1
+    assert first["item_priority"] == 1
+    assert first["launch_date"] == "2026-09-10"

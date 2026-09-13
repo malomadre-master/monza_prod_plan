@@ -141,6 +141,11 @@ export type PlanSlot = {
   volume: string;
   start: string;
   finish: string;
+  item_type: ItemType;
+  qty: number;
+  order_priority: number;
+  item_priority: number;
+  launch_date: string;
 };
 
 export function getToken(): string | null {
