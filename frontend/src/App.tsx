@@ -18,7 +18,7 @@ const UsersPage = lazy(() => import("./pages/UsersPage").then((m) => ({ default:
 
 const navStyle = ({ isActive }: { isActive: boolean }) => ({
   display: "block",
-  padding: "8px 0",
+  padding: "12px 0",
   textDecoration: "none",
   fontWeight: isActive ? 700 : 500,
   color: "inherit",

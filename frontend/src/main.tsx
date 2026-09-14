@@ -38,3 +38,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </React.StrictMode>
   </BootErrorBoundary>,
 );
+
+if (import.meta.env.PROD && window.isSecureContext) {
+  void import("virtual:pwa-register").then(({ registerSW }) => {
+    registerSW({ immediate: true });
+  });
+}

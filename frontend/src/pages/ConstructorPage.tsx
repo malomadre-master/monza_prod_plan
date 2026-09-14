@@ -60,7 +60,7 @@ export function ConstructorPage({ user }: { user: User }) {
             empty="Свободных заказов нет."
             action={(row) => (
               <Button
-                size="xs"
+                size="md"
                 disabled={blocked}
                 loading={busyId === row.id}
                 onClick={() => void claim(row.id)}
@@ -75,7 +75,7 @@ export function ConstructorPage({ user }: { user: User }) {
             rows={mine}
             empty="Сейчас нет взятого заказа."
             action={(row) => (
-              <Button size="xs" component={Link} to={`/orders/${row.id}`}>
+              <Button size="md" component={Link} to={`/orders/${row.id}`}>
                 Документы
               </Button>
             )}

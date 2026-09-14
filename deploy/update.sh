@@ -14,6 +14,7 @@ fi
 
 docker compose build
 docker compose up -d --remove-orphans
+install -m 644 deploy/nginx-monza-prod-plan.conf /etc/nginx/sites-available/monza-prod-plan
 nginx -t && systemctl reload nginx
 
 ok=0

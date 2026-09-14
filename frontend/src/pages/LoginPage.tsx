@@ -49,7 +49,7 @@ export function LoginPage({ onLogin }: { onLogin: (user: User) => void }) {
           <Stack>
             <TextInput label="Логин" value={username} onChange={(e) => setUsername(e.currentTarget.value)} required />
             <PasswordInput label="Пароль" value={password} onChange={(e) => setPassword(e.currentTarget.value)} required />
-            <Button type="submit" loading={loading}>
+            <Button type="submit" size="lg" loading={loading}>
               Войти
             </Button>
           </Stack>

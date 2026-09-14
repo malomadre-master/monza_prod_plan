@@ -179,17 +179,17 @@ function ItemCard({
       )}
       <Group mt="md" grow>
         {onTake && (
-          <Button size="md" disabled={disabled} loading={busy === `${card.item_id}-taken`} onClick={onTake}>
+          <Button size="lg" disabled={disabled} loading={busy === `${card.item_id}-taken`} onClick={onTake}>
             Взять
           </Button>
         )}
         {onDone && (
-          <Button size="md" color="teal" loading={busy === `${card.item_id}-done`} onClick={onDone}>
+          <Button size="lg" color="teal" loading={busy === `${card.item_id}-done`} onClick={onDone}>
             Готово
           </Button>
         )}
         {onConfirm && (
-          <Button size="md" color="teal" loading={busy === `${card.item_id}-materials_confirmed`} onClick={onConfirm}>
+          <Button size="lg" color="teal" loading={busy === `${card.item_id}-materials_confirmed`} onClick={onConfirm}>
             Всё в наличии
           </Button>
         )}
