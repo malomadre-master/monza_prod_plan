@@ -34,6 +34,17 @@
   color: var(--mantine-color-white);
 }
 
+.sortable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.dragging {
+  opacity: 0.7;
+  cursor: grabbing;
+  z-index: 2;
+}
+
 .card:hover {
   filter: brightness(1.05);
 }

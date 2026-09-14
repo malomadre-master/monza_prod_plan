@@ -118,3 +118,51 @@ def test_pin_preview_and_apply_moves_other_slot(client) -> None:
     plan = client.get("/api/plan", headers=headers).json()
     saw_b = next(row for row in plan if row["item_id"] == item_b and row["center_code"] == "saw")
     assert saw_b["pinned"] is False
+
+
+def test_queue_reorder_preview_and_apply(client) -> None:
+    token = login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    kitchen = {**SAMPLE["items"][0], "area_m2": "100"}
+    first = client.post("/api/orders", json={**SAMPLE, "items": [kitchen]}, headers=headers)
+    second = client.post(
+        "/api/orders",
+        json={**SAMPLE, "customer": "Petrov", "priority": 2, "contract_number": "D-13", "items": [kitchen]},
+        headers=headers,
+    )
+    assert first.status_code == 201 and second.status_code == 201
+    item_a = first.json()["items"][0]["id"]
+    item_b = second.json()["items"][0]["id"]
+    plan = client.get("/api/plan", headers=headers).json()
+    saw_a_before = next(row for row in plan if row["item_id"] == item_a and row["center_code"] == "saw")
+    saw_b_before = next(row for row in plan if row["item_id"] == item_b and row["center_code"] == "saw")
+    assert saw_a_before["start"] < saw_b_before["start"]
+    payload = {"center_code": "construction", "item_ids": [item_b, item_a]}
+    preview = client.post("/api/plan/queue/preview", json=payload, headers=headers)
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["changes"]
+    saw_a_preview = next(row for row in body["slots"] if row["item_id"] == item_a and row["center_code"] == "saw")
+    saw_b_preview = next(row for row in body["slots"] if row["item_id"] == item_b and row["center_code"] == "saw")
+    assert saw_b_preview["start"] < saw_a_preview["start"]
+    plan = client.get("/api/plan", headers=headers).json()
+    saw_a = next(row for row in plan if row["item_id"] == item_a and row["center_code"] == "saw")
+    assert saw_a["start"] == saw_a_before["start"]
+    incomplete = client.post("/api/plan/queue/preview", json={"center_code": "construction", "item_ids": [item_a]}, headers=headers)
+    assert incomplete.status_code == 409
+    applied = client.put("/api/plan/queue", json=payload, headers=headers)
+    assert applied.status_code == 200, applied.text
+    plan = client.get("/api/plan", headers=headers).json()
+    saw_a = next(row for row in plan if row["item_id"] == item_a and row["center_code"] == "saw")
+    saw_b = next(row for row in plan if row["item_id"] == item_b and row["center_code"] == "saw")
+    assert saw_b["start"] < saw_a["start"]
+    board = client.get("/api/plan/board", headers=headers).json()
+    waiting = [row for row in board if row["center_code"] == "construction" and row["board_status"] == "waiting"]
+    assert [row["item_id"] for row in waiting] == [item_b, item_a]
+    worker = client.post("/api/auth/login", json={"username": "worker1", "password": "pass"})
+    forbidden = client.put(
+        "/api/plan/queue",
+        json=payload,
+        headers={"Authorization": f"Bearer {worker.json()['access_token']}"},
+    )
+    assert forbidden.status_code == 403

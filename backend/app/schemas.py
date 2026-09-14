@@ -185,6 +185,11 @@ class PinIn(BaseModel):
     remove: bool = False
 
 
+class QueueReorderIn(BaseModel):
+    center_code: str
+    item_ids: list[int]
+
+
 class PlanDiffRow(BaseModel):
     order_id: int
     item_id: int

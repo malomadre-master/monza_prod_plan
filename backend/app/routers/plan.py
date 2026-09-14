@@ -22,7 +22,7 @@ from app.models import (
     WorkEvent,
     WorkEventKind,
 )
-from app.schemas import BoardCardOut, PinIn, PlanDiffRow, PlanPreviewOut, PlanSlotOut
+from app.schemas import BoardCardOut, PinIn, PlanDiffRow, PlanPreviewOut, PlanSlotOut, QueueReorderIn
 from scheduler.engine import plan_jobs
 from scheduler.models import SHOP_ROUTE, CenterSpec, ConstructorSpec, Job, Pin
 
@@ -33,7 +33,11 @@ def _db_pins(db: Session) -> list[Pin]:
     return [Pin(row.item_id, row.center_code, row.start, row.finish) for row in db.query(SchedulePin).all()]
 
 
-def _plan_slots(db: Session, pins: list[Pin] | None = None) -> list[PlanSlotOut]:
+def _plan_slots(
+    db: Session,
+    pins: list[Pin] | None = None,
+    priority_overrides: dict[int, tuple[int, int]] | None = None,
+) -> list[PlanSlotOut]:
     centers = [
         CenterSpec(
             code=row.code,
@@ -93,13 +97,16 @@ def _plan_slots(db: Session, pins: list[Pin] | None = None) -> list[PlanSlotOut]
         names[order.id] = order.customer
         for item in order.items:
             needed = True if item.procurement_needed is None else item.procurement_needed
-            item_meta[item.id] = (item.item_type, item.qty, order.priority, item.priority, order.launch_date)
+            order_priority, item_priority = order.priority, item.priority
+            if priority_overrides and item.id in priority_overrides:
+                order_priority, item_priority = priority_overrides[item.id]
+            item_meta[item.id] = (item.item_type, item.qty, order_priority, item_priority, order.launch_date)
             jobs.append(
                 Job(
                     order_id=order.id,
                     item_id=item.id,
-                    order_priority=order.priority,
-                    item_priority=item.priority,
+                    order_priority=order_priority,
+                    item_priority=item_priority,
                     launch_date=order.launch_date,
                     contract_date=order.contract_date,
                     qty=item.qty,
@@ -348,3 +355,91 @@ def delete_pin(
     user: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
 ) -> PlanPreviewOut:
     return apply_pin(PinIn(item_id=item_id, center_code=center_code, remove=True), db, user)
+
+
+def _queue_priority_overrides(db: Session, payload: QueueReorderIn) -> dict[int, tuple[int, int]]:
+    if payload.center_code not in WORK_CENTER_CODES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неизвестный участок")
+    if len(payload.item_ids) != len(set(payload.item_ids)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Повторы в очереди")
+    orders = (
+        db.query(Order)
+        .options(selectinload(Order.items), joinedload(Order.claimed_by))
+        .filter(Order.status != OrderStatus.draft)
+        .all()
+    )
+    items_by_id = {item.id: item for order in orders for item in order.items}
+    missing = [item_id for item_id in payload.item_ids if item_id not in items_by_id]
+    if missing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Изделие не найдено")
+    events = _event_map(db, list(items_by_id))
+    waiting = [
+        item.id
+        for item in items_by_id.values()
+        if _board_step(item, events)[:2] == (payload.center_code, "waiting")
+    ]
+    if sorted(payload.item_ids) != sorted(waiting):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Перетаскивать можно только очередь ожидания этого участка",
+        )
+    order_rank: dict[int, int] = {}
+    next_rank = 1
+    item_rank: dict[int, int] = {}
+    per_order = defaultdict(int)
+    for item_id in payload.item_ids:
+        item = items_by_id[item_id]
+        if item.order_id not in order_rank:
+            order_rank[item.order_id] = min(next_rank, 9)
+            next_rank += 1
+        per_order[item.order_id] += 1
+        item_rank[item_id] = min(per_order[item.order_id], 9)
+    overrides: dict[int, tuple[int, int]] = {}
+    for item in items_by_id.values():
+        if item.order_id in order_rank:
+            overrides[item.id] = (order_rank[item.order_id], item_rank.get(item.id, item.priority))
+    return overrides
+
+
+def _apply_queue_priorities(db: Session, payload: QueueReorderIn, overrides: dict[int, tuple[int, int]]) -> None:
+    if not payload.item_ids:
+        return
+    items = (
+        db.query(OrderItem)
+        .options(joinedload(OrderItem.order))
+        .filter(OrderItem.id.in_(payload.item_ids))
+        .all()
+    )
+    seen_orders: set[int] = set()
+    for item in items:
+        order_priority, item_priority = overrides[item.id]
+        item.priority = item_priority
+        if item.order_id not in seen_orders:
+            item.order.priority = order_priority
+            seen_orders.add(item.order_id)
+    db.commit()
+
+
+@router.post("/plan/queue/preview", response_model=PlanPreviewOut)
+def preview_queue(
+    payload: QueueReorderIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+) -> PlanPreviewOut:
+    overrides = _queue_priority_overrides(db, payload)
+    current = _plan_slots(db)
+    proposed = _plan_slots(db, priority_overrides=overrides)
+    return PlanPreviewOut(changes=_plan_diff(current, proposed), slots=proposed)
+
+
+@router.put("/plan/queue", response_model=PlanPreviewOut)
+def apply_queue(
+    payload: QueueReorderIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+) -> PlanPreviewOut:
+    overrides = _queue_priority_overrides(db, payload)
+    current = _plan_slots(db)
+    _apply_queue_priorities(db, payload, overrides)
+    after = _plan_slots(db)
+    return PlanPreviewOut(changes=_plan_diff(current, after), slots=after)

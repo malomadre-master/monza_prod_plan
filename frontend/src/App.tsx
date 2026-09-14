@@ -175,7 +175,7 @@ export function App() {
             path="/kanban"
             element={
               <Protected user={user}>
-                <KanbanPage />
+                <KanbanPage canReorder={canEditOrders(user!.role)} />
               </Protected>
             }
           />
