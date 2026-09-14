@@ -166,3 +166,55 @@ def test_queue_reorder_preview_and_apply(client) -> None:
         headers={"Authorization": f"Bearer {worker.json()['access_token']}"},
     )
     assert forbidden.status_code == 403
+
+
+def test_plan_version_saved_on_pin_and_queue(client) -> None:
+    token = login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    kitchen = {**SAMPLE["items"][0], "area_m2": "100"}
+    first = client.post("/api/orders", json={**SAMPLE, "items": [kitchen]}, headers=headers)
+    second = client.post(
+        "/api/orders",
+        json={**SAMPLE, "customer": "Petrov", "priority": 2, "contract_number": "D-13", "items": [kitchen]},
+        headers=headers,
+    )
+    assert first.status_code == 201 and second.status_code == 201
+    item_a = first.json()["items"][0]["id"]
+    item_b = second.json()["items"][0]["id"]
+    empty = client.get("/api/plan/versions", headers=headers)
+    assert empty.status_code == 200
+    assert empty.json() == []
+    plan = client.get("/api/plan", headers=headers).json()
+    saw_first = next(row for row in plan if row["item_id"] == item_a and row["center_code"] == "saw")
+    pinned = client.put(
+        "/api/plan/pins",
+        json={"item_id": item_b, "center_code": "saw", "start": saw_first["start"], "finish": saw_first["finish"]},
+        headers=headers,
+    )
+    assert pinned.status_code == 200, pinned.text
+    queued = client.put(
+        "/api/plan/queue",
+        json={"center_code": "construction", "item_ids": [item_b, item_a]},
+        headers=headers,
+    )
+    assert queued.status_code == 200, queued.text
+    versions = client.get("/api/plan/versions", headers=headers)
+    assert versions.status_code == 200, versions.text
+    rows = versions.json()
+    assert [row["reason"] for row in rows] == ["queue", "pin"]
+    assert rows[0]["created_by_name"] == "Админ"
+    assert rows[1]["change_count"] >= 1
+    detail = client.get(f"/api/plan/versions/{rows[1]['id']}", headers=headers)
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["reason"] == "pin"
+    assert body["changes"]
+    assert any(slot["item_id"] == item_b and slot["pinned"] for slot in body["slots"])
+    missing = client.get("/api/plan/versions/9999", headers=headers)
+    assert missing.status_code == 404
+    worker = client.post("/api/auth/login", json={"username": "worker1", "password": "pass"})
+    forbidden = client.get(
+        "/api/plan/versions",
+        headers={"Authorization": f"Bearer {worker.json()['access_token']}"},
+    )
+    assert forbidden.status_code == 403

@@ -97,6 +97,74 @@ def test_take_done_and_wip_one(client, tmp_path, monkeypatch) -> None:
     assert again.status_code == 201, again.text
 
 
+def test_taken_step_is_pinned_until_done(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("app.files.settings.attachments_dir", str(tmp_path))
+    order_id, item_id = _item_ready(client, procurement=False)
+    worker = _auth(client, "worker1")
+    admin = {"Authorization": f"Bearer {login(client)}"}
+    taken = client.post(
+        "/api/terminal/events",
+        json={"order_id": order_id, "item_id": item_id, "kind": "taken", "center_code": "saw"},
+        headers=worker,
+    )
+    assert taken.status_code == 201, taken.text
+    plan = client.get("/api/plan", headers=admin).json()
+    saw = next(row for row in plan if row["item_id"] == item_id and row["center_code"] == "saw")
+    assert saw["pinned"] is True
+    forbidden = client.put(
+        "/api/plan/pins",
+        json={"item_id": item_id, "center_code": "saw", "remove": True},
+        headers=admin,
+    )
+    assert forbidden.status_code == 409
+    done = client.post(
+        "/api/terminal/events",
+        json={"order_id": order_id, "item_id": item_id, "kind": "done"},
+        headers=worker,
+    )
+    assert done.status_code == 201, done.text
+    plan = client.get("/api/plan", headers=admin).json()
+    saw = next(row for row in plan if row["item_id"] == item_id and row["center_code"] == "saw")
+    assert saw["pinned"] is False
+
+
+def test_claim_pins_construction_until_complete(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("app.files.settings.attachments_dir", str(tmp_path))
+    headers = {"Authorization": f"Bearer {login(client)}"}
+    created = client.post("/api/orders", json=SAMPLE, headers=headers)
+    assert created.status_code == 201, created.text
+    order_id = created.json()["id"]
+    item_id = created.json()["items"][0]["id"]
+    d1 = _auth(client, "designer1")
+    claimed = client.post(f"/api/orders/{order_id}/claim", headers=d1)
+    assert claimed.status_code == 200, claimed.text
+    plan = client.get("/api/plan", headers=headers).json()
+    construction = next(row for row in plan if row["item_id"] == item_id and row["center_code"] == "construction")
+    assert construction["pinned"] is True
+    blocked = client.put(
+        "/api/plan/pins",
+        json={"item_id": item_id, "center_code": "construction", "remove": True},
+        headers=headers,
+    )
+    assert blocked.status_code == 409
+    upload = client.post(
+        f"/api/orders/{order_id}/items/{item_id}/attachments",
+        data={"store": "production"},
+        files={"file": ("plan.pdf", b"%PDF-1.4 test", "application/pdf")},
+        headers=d1,
+    )
+    assert upload.status_code == 201, upload.text
+    done = client.post(
+        f"/api/orders/{order_id}/items/{item_id}/complete",
+        json={"procurement_needed": False},
+        headers=d1,
+    )
+    assert done.status_code == 200, done.text
+    plan = client.get("/api/plan", headers=headers).json()
+    construction = next(row for row in plan if row["item_id"] == item_id and row["center_code"] == "construction")
+    assert construction["pinned"] is False
+
+
 def test_worker_cannot_open_other_center(client) -> None:
     worker = _auth(client, "worker1")
     response = client.get("/api/terminal/queue?center=edgebanding", headers=worker)

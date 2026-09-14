@@ -15,6 +15,7 @@ from app.models import (
     Order,
     OrderItem,
     OrderStatus,
+    PlanVersion,
     SchedulePin,
     User,
     UserRole,
@@ -22,7 +23,17 @@ from app.models import (
     WorkEvent,
     WorkEventKind,
 )
-from app.schemas import BoardCardOut, PinIn, PlanDiffRow, PlanPreviewOut, PlanSlotOut, QueueReorderIn
+from app.schemas import (
+    BoardCardOut,
+    PinIn,
+    PlanDiffRow,
+    PlanPreviewOut,
+    PlanSlotOut,
+    PlanVersionListOut,
+    PlanVersionOut,
+    QueueReorderIn,
+)
+from app.pinning import step_in_progress
 from scheduler.engine import plan_jobs
 from scheduler.models import SHOP_ROUTE, CenterSpec, ConstructorSpec, Job, Pin
 
@@ -265,6 +276,35 @@ def _plan_diff(before: list[PlanSlotOut], after: list[PlanSlotOut]) -> list[Plan
     return changes
 
 
+def _save_plan_version(
+    db: Session,
+    user: User,
+    reason: str,
+    changes: list[PlanDiffRow],
+    slots: list[PlanSlotOut],
+) -> None:
+    db.add(
+        PlanVersion(
+            created_by_id=user.id,
+            reason=reason,
+            change_count=len(changes),
+            slots_json=[row.model_dump(mode="json") for row in slots],
+            changes_json=[row.model_dump(mode="json") for row in changes],
+        )
+    )
+    db.commit()
+
+
+def _version_list_row(row: PlanVersion) -> PlanVersionListOut:
+    return PlanVersionListOut(
+        id=row.id,
+        created_at=row.created_at,
+        created_by_name=row.created_by.display_name if row.created_by else "",
+        reason=row.reason,
+        change_count=row.change_count,
+    )
+
+
 def _resolve_pin_dates(payload: PinIn, current: list[PlanSlotOut]) -> tuple[date, date]:
     found = next(
         (row for row in current if row.item_id == payload.item_id and row.center_code == payload.center_code),
@@ -304,6 +344,11 @@ def preview_pin(
     _: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
 ) -> PlanPreviewOut:
     _require_item(db, payload)
+    if payload.remove and step_in_progress(db, payload.item_id, payload.center_code):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Нельзя снять закрепление: шаг уже в работе",
+        )
     current = _plan_slots(db)
     proposed = _plan_slots(db, pins=_proposed_pins(db, payload, current))
     return PlanPreviewOut(changes=_plan_diff(current, proposed), slots=proposed)
@@ -316,6 +361,11 @@ def apply_pin(
     user: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
 ) -> PlanPreviewOut:
     item = _require_item(db, payload)
+    if payload.remove and step_in_progress(db, payload.item_id, payload.center_code):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Нельзя снять закрепление: шаг уже в работе",
+        )
     current = _plan_slots(db)
     proposed_pins = _proposed_pins(db, payload, current)
     row = (
@@ -344,7 +394,9 @@ def apply_pin(
             row.finish = finish
         db.commit()
     after = _plan_slots(db, pins=proposed_pins)
-    return PlanPreviewOut(changes=_plan_diff(current, after), slots=after)
+    changes = _plan_diff(current, after)
+    _save_plan_version(db, user, "unpin" if payload.remove else "pin", changes, after)
+    return PlanPreviewOut(changes=changes, slots=after)
 
 
 @router.delete("/plan/pins/{item_id}/{center_code}", response_model=PlanPreviewOut)
@@ -436,10 +488,49 @@ def preview_queue(
 def apply_queue(
     payload: QueueReorderIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+    user: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
 ) -> PlanPreviewOut:
     overrides = _queue_priority_overrides(db, payload)
     current = _plan_slots(db)
     _apply_queue_priorities(db, payload, overrides)
     after = _plan_slots(db)
-    return PlanPreviewOut(changes=_plan_diff(current, after), slots=after)
+    changes = _plan_diff(current, after)
+    _save_plan_version(db, user, "queue", changes, after)
+    return PlanPreviewOut(changes=changes, slots=after)
+
+
+@router.get("/plan/versions", response_model=list[PlanVersionListOut])
+def list_plan_versions(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+) -> list[PlanVersionListOut]:
+    rows = (
+        db.query(PlanVersion)
+        .options(joinedload(PlanVersion.created_by))
+        .order_by(PlanVersion.id.desc())
+        .limit(50)
+        .all()
+    )
+    return [_version_list_row(row) for row in rows]
+
+
+@router.get("/plan/versions/{version_id}", response_model=PlanVersionOut)
+def get_plan_version(
+    version_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(*ORDER_CREATE_ROLES)),
+) -> PlanVersionOut:
+    row = (
+        db.query(PlanVersion)
+        .options(joinedload(PlanVersion.created_by))
+        .filter(PlanVersion.id == version_id)
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия плана не найдена")
+    summary = _version_list_row(row)
+    return PlanVersionOut(
+        **summary.model_dump(),
+        changes=[PlanDiffRow.model_validate(item) for item in row.changes_json],
+        slots=[PlanSlotOut.model_validate(item) for item in row.slots_json],
+    )

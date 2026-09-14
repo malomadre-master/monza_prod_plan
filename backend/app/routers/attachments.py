@@ -9,6 +9,7 @@ from app.deps import get_current_user
 from app.files import INLINE_SUFFIXES, file_path, store_file, validate_upload
 from app.models import Attachment, AttachmentStore, Order, OrderItem, OrderStatus, User, UserRole
 from app.schemas import AttachmentOut, ItemCompleteIn, OrderOut
+from app.pinning import pin_from_plan, unpin_slot
 from app.routers.orders import _order_out
 
 router = APIRouter(prefix="/api", tags=["attachments"])
@@ -147,6 +148,9 @@ def claim_order(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Заказ уже взяли")
     order.claimed_by_id = user.id
     order.status = OrderStatus.in_design
+    db.flush()
+    for item in order.items:
+        pin_from_plan(db, item.id, "construction", user.id)
     db.commit()
     order = (
         db.query(Order)
@@ -183,6 +187,7 @@ def complete_item(
     )
     if remaining == 0:
         item.order.status = OrderStatus.in_production
+    unpin_slot(db, item.id, "construction")
     db.commit()
     order = (
         db.query(Order)

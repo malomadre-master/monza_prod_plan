@@ -165,6 +165,21 @@ export type PlanPreview = {
   slots: PlanSlot[];
 };
 
+export type PlanVersionReason = "pin" | "unpin" | "queue";
+
+export type PlanVersionRow = {
+  id: number;
+  created_at: string;
+  created_by_name: string;
+  reason: PlanVersionReason | string;
+  change_count: number;
+};
+
+export type PlanVersionDetail = PlanVersionRow & {
+  changes: PlanDiffRow[];
+  slots: PlanSlot[];
+};
+
 export type BoardStatus = "waiting" | "in_progress" | "done";
 
 export type BoardCard = {

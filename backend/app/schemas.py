@@ -206,6 +206,19 @@ class PlanPreviewOut(BaseModel):
     slots: list[PlanSlotOut]
 
 
+class PlanVersionListOut(BaseModel):
+    id: int
+    created_at: datetime
+    created_by_name: str
+    reason: str
+    change_count: int
+
+
+class PlanVersionOut(PlanVersionListOut):
+    changes: list[PlanDiffRow]
+    slots: list[PlanSlotOut]
+
+
 class BoardCardOut(BaseModel):
     order_id: int
     item_id: int

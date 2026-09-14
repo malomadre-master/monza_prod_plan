@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -185,3 +185,17 @@ class SchedulePin(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     item: Mapped[OrderItem] = relationship()
+
+
+class PlanVersion(Base):
+    __tablename__ = "plan_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    reason: Mapped[str] = mapped_column(String(20))
+    change_count: Mapped[int] = mapped_column(Integer, default=0)
+    slots_json: Mapped[list] = mapped_column(JSON, default=list)
+    changes_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    created_by: Mapped[User] = relationship()

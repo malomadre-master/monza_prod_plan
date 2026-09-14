@@ -16,6 +16,7 @@ from app.models import (
     WorkEventKind,
 )
 from app.schemas import TerminalCardOut, TerminalFileOut, TerminalQueueOut, WorkEventIn, WorkEventOut
+from app.pinning import pin_from_plan, unpin_slot
 from scheduler.models import SHOP_ROUTE
 
 router = APIRouter(prefix="/api/terminal", tags=["terminal"])
@@ -220,6 +221,10 @@ def post_event(
         user_id=user.id,
     )
     db.add(row)
+    if payload.kind == WorkEventKind.taken:
+        pin_from_plan(db, item.id, center, user.id)
+    elif payload.kind == WorkEventKind.done:
+        unpin_slot(db, item.id, center)
     try:
         db.commit()
     except IntegrityError:

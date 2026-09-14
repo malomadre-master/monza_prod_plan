@@ -15,7 +15,7 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { api, type CalendarDay, type PlanPreview, type PlanSlot, type WorkCenterRow } from "../api";
+import { api, type CalendarDay, type PlanPreview, type PlanSlot, type PlanVersionDetail, type PlanVersionRow, type WorkCenterRow } from "../api";
 import { CENTER_LABEL, itemLabel, ITEM_FALLBACK } from "../labels";
 import {
   addDays,
@@ -40,6 +40,22 @@ import {
 } from "../plan/monitor";
 import classes from "./PlanPage.module.css";
 
+const VERSION_REASON: Record<string, string> = {
+  pin: "Закрепление",
+  unpin: "Снятие закрепления",
+  queue: "Очередь канбана",
+};
+
+function versionReasonLabel(reason: string): string {
+  return VERSION_REASON[reason] ?? reason;
+}
+
+function formatVersionTime(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleString("ru-RU");
+}
+
 export function PlanPage({ canPin = false }: { canPin?: boolean }) {
   const [slots, setSlots] = useState<PlanSlot[]>([]);
   const [centers, setCenters] = useState<WorkCenterRow[]>([]);
@@ -56,6 +72,10 @@ export function PlanPage({ canPin = false }: { canPin?: boolean }) {
   const [preview, setPreview] = useState<PlanPreview | null>(null);
   const [previewRemove, setPreviewRemove] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versions, setVersions] = useState<PlanVersionRow[]>([]);
+  const [versionDetail, setVersionDetail] = useState<PlanVersionDetail | null>(null);
+  const [historyError, setHistoryError] = useState("");
   const today = todayISO();
 
   useEffect(() => {
@@ -175,6 +195,26 @@ export function PlanPage({ canPin = false }: { canPin?: boolean }) {
     }
   }
 
+  async function openHistory() {
+    setHistoryOpen(true);
+    setVersionDetail(null);
+    setHistoryError("");
+    try {
+      setVersions(await api<PlanVersionRow[]>("/api/plan/versions"));
+    } catch (err) {
+      setHistoryError((err as Error).message);
+    }
+  }
+
+  async function loadVersion(id: number) {
+    setHistoryError("");
+    try {
+      setVersionDetail(await api<PlanVersionDetail>(`/api/plan/versions/${id}`));
+    } catch (err) {
+      setHistoryError((err as Error).message);
+    }
+  }
+
   return (
     <Stack gap="md">
       <Group justify="space-between" align="flex-start">
@@ -185,6 +225,11 @@ export function PlanPage({ canPin = false }: { canPin?: boolean }) {
           </Text>
         </div>
         <Group>
+          {canPin && (
+            <Button variant="light" onClick={() => void openHistory()}>
+              История
+            </Button>
+          )}
           <Button variant="default" onClick={() => shift(-1)}>
             ←
           </Button>
@@ -385,6 +430,77 @@ export function PlanPage({ canPin = false }: { canPin?: boolean }) {
             })}
           </Stack>
         )}
+      </Drawer>
+
+      <Drawer
+        opened={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        title="История плана"
+        position="right"
+        size="lg"
+      >
+        <Stack>
+          <Text size="sm" c="dimmed">
+            Снимки после закрепления, снятия пина и смены очереди канбана. Откат пока не применяем.
+          </Text>
+          {historyError && <Text c="red">{historyError}</Text>}
+          {versions.length === 0 && !historyError ? (
+            <Text c="dimmed">Пока нет сохранённых версий.</Text>
+          ) : (
+            versions.map((row) => (
+              <Button
+                key={row.id}
+                variant={versionDetail?.id === row.id ? "filled" : "light"}
+                justify="space-between"
+                onClick={() => void loadVersion(row.id)}
+              >
+                {versionReasonLabel(row.reason)} · {formatVersionTime(row.created_at)} · {row.created_by_name} ·{" "}
+                {row.change_count} сдвигов
+              </Button>
+            ))
+          )}
+          {versionDetail && (
+            <Stack gap="xs">
+              <Text fw={600}>
+                {versionReasonLabel(versionDetail.reason)} #{versionDetail.id}
+              </Text>
+              {versionDetail.changes.length === 0 ? (
+                <Text c="dimmed">Даты слотов не изменились.</Text>
+              ) : (
+                <Table.ScrollContainer minWidth={480}>
+                  <Table striped>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Заказчик</Table.Th>
+                        <Table.Th>Участок</Table.Th>
+                        <Table.Th>Было</Table.Th>
+                        <Table.Th>Стало</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {versionDetail.changes.map((row) => (
+                        <Table.Tr key={`${row.item_id}-${row.center_code}`}>
+                          <Table.Td>
+                            {row.customer} #{row.item_id}
+                          </Table.Td>
+                          <Table.Td>{CENTER_LABEL[row.center_code] ?? row.center_code}</Table.Td>
+                          <Table.Td>
+                            {row.before_start ?? "—"}
+                            {row.before_finish ? ` → ${row.before_finish}` : ""}
+                          </Table.Td>
+                          <Table.Td>
+                            {row.after_start ?? "—"}
+                            {row.after_finish ? ` → ${row.after_finish}` : ""}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
+              )}
+            </Stack>
+          )}
+        </Stack>
       </Drawer>
     </Stack>
   );
