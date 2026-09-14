@@ -7,6 +7,27 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        var cryptoObj = globalThis.crypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID !== "function") {
+          try {
+            Object.defineProperty(cryptoObj, "randomUUID", {
+              configurable: true,
+              value: function () {
+                return "id-" + Date.now().toString(16) + "-" + Math.random().toString(16).slice(2);
+              },
+            });
+          } catch (err) {}
+        }
+        window.addEventListener("error", function (event) {
+          var root = document.getElementById("root");
+          if (!root || root.childElementCount) return;
+          root.style.cssText = "font-family:sans-serif;padding:16px;white-space:pre-wrap;color:#b00020";
+          root.textContent = (event.error && event.error.stack) || event.message || "Ошибка загрузки";
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,19 +1,20 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { AppShell, Burger, Button, Group, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { api, getToken, setToken, type User } from "./api";
 import { ROLE_LABEL, canEditOrders, canManageCalendar, canUseTerminal, canWorkAsDesigner } from "./labels";
-import { CalendarPage } from "./pages/CalendarPage";
-import { ConstructorPage } from "./pages/ConstructorPage";
-import { KanbanPage } from "./pages/KanbanPage";
-import { TerminalPage } from "./pages/TerminalPage";
 import { LoginPage } from "./pages/LoginPage";
-import { OrderFormPage } from "./pages/OrderFormPage";
-import { OrderViewPage } from "./pages/OrderViewPage";
-import { OrdersPage } from "./pages/OrdersPage";
-import { PlanPage } from "./pages/PlanPage";
-import { UsersPage } from "./pages/UsersPage";
+
+const CalendarPage = lazy(() => import("./pages/CalendarPage").then((m) => ({ default: m.CalendarPage })));
+const ConstructorPage = lazy(() => import("./pages/ConstructorPage").then((m) => ({ default: m.ConstructorPage })));
+const KanbanPage = lazy(() => import("./pages/KanbanPage").then((m) => ({ default: m.KanbanPage })));
+const OrderFormPage = lazy(() => import("./pages/OrderFormPage").then((m) => ({ default: m.OrderFormPage })));
+const OrderViewPage = lazy(() => import("./pages/OrderViewPage").then((m) => ({ default: m.OrderViewPage })));
+const OrdersPage = lazy(() => import("./pages/OrdersPage").then((m) => ({ default: m.OrdersPage })));
+const PlanPage = lazy(() => import("./pages/PlanPage").then((m) => ({ default: m.PlanPage })));
+const TerminalPage = lazy(() => import("./pages/TerminalPage").then((m) => ({ default: m.TerminalPage })));
+const UsersPage = lazy(() => import("./pages/UsersPage").then((m) => ({ default: m.UsersPage })));
 
 const navStyle = ({ isActive }: { isActive: boolean }) => ({
   display: "block",
@@ -23,9 +24,15 @@ const navStyle = ({ isActive }: { isActive: boolean }) => ({
   color: "inherit",
 });
 
-function Protected({ user, children }: { user: User | null; children: React.ReactNode }) {
+function Protected({
+  user,
+  children,
+}: {
+  user: User | null;
+  children: React.ReactNode | ((session: User) => React.ReactNode);
+}) {
   if (!user) return <Navigate to="/login" replace />;
-  return children;
+  return <>{typeof children === "function" ? children(user) : children}</>;
 }
 
 function ConstructorRoute({ user }: { user: User | null }) {
@@ -160,32 +167,33 @@ export function App() {
         )}
       </AppShell.Navbar>
       <AppShell.Main>
-        <Routes>
+        <Suspense
+          fallback={
+            <Text p="md" c="dimmed">
+              Загрузка…
+            </Text>
+          }
+        >
+          <Routes>
           <Route path="/login" element={<LoginPage onLogin={setUser} />} />
           <Route path="/constructor" element={<ConstructorRoute user={user} />} />
           <Route
             path="/plan"
             element={
-              <Protected user={user}>
-                <PlanPage canPin={canEditOrders(user!.role)} />
-              </Protected>
+              <Protected user={user}>{(session) => <PlanPage canPin={canEditOrders(session.role)} />}</Protected>
             }
           />
           <Route
             path="/kanban"
             element={
               <Protected user={user}>
-                <KanbanPage canReorder={canEditOrders(user!.role)} />
+                {(session) => <KanbanPage canReorder={canEditOrders(session.role)} />}
               </Protected>
             }
           />
           <Route
             path="/orders"
-            element={
-              <Protected user={user}>
-                <OrdersPage user={user!} />
-              </Protected>
-            }
+            element={<Protected user={user}>{(session) => <OrdersPage user={session} />}</Protected>}
           />
           <Route
             path="/orders/new"
@@ -205,17 +213,14 @@ export function App() {
           />
           <Route
             path="/orders/:id"
-            element={
-              <Protected user={user}>
-                <OrderViewPage user={user!} />
-              </Protected>
-            }
+            element={<Protected user={user}>{(session) => <OrderViewPage user={session} />}</Protected>}
           />
           <Route path="/terminal" element={<TerminalRoute user={user} />} />
           <Route path="/calendar" element={<CalendarRoute user={user} />} />
           <Route path="/users" element={<UsersRoute user={user} />} />
           <Route path="*" element={<Navigate to={homePath(user)} replace />} />
         </Routes>
+        </Suspense>
       </AppShell.Main>
     </AppShell>
   );
